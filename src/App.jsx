@@ -62,19 +62,47 @@ function round1(n) { return Math.round((n + Number.EPSILON) * 10) / 10; }
 const TAG_KEY_LIST = TAGS.map(t => t.key).join(', ');
 const CATEGORY_LIST = CATEGORIES.join(', ');
 
+function buildExtractionPrompt({ hasImage, url, pastedText }) {
+  let prompt = `You are helping fill in a recipe card. Read the recipe from the ${hasImage ? 'attached screenshot' : url ? 'linked page' : 'text'} below and respond with ONLY raw JSON, no markdown fences, no commentary, matching exactly this shape:
+{"name":string,"servings":number,"calories":number,"protein":number,"carbs":number,"veggieServings":number,"vegetarian":boolean,"tags":string[],"ingredients":[{"name":string,"qty":number,"unit":string,"category":string}],"instructions":string,"prepAhead":string}
+
+Rules:
+- calories/protein/carbs are PER SERVING best estimates (numbers, not strings).
+- veggieServings is a rough per-serving count of vegetable servings (can be a decimal like 1.5).
+- tags: choose any that reasonably fit from exactly these keys: ${TAG_KEY_LIST}.
+- ingredients[].category must be one of: ${CATEGORY_LIST}.
+- instructions should be a short, clear method in a few sentences.
+- prepAhead: one short sentence on what can be made ahead, or "" if not applicable.
+- If exact nutrition isn't stated, estimate sensibly from the ingredients rather than leaving fields at 0.
+- Never leave "ingredients" empty if any are visible or inferable.`;
+  if (url) prompt += `\n\nURL: ${url}`;
+  if (pastedText) prompt += `\n\nRecipe text:\n${pastedText}`;
+  return prompt;
+}
+
 async function extractRecipeFromAI({ imageBase64, imageMediaType, url, pastedText }) {
-  const res = await fetch('/api/extract-recipe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64, imageMediaType, url, pastedText }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  let res;
+  try {
+    res = await fetch('/api/extract-recipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64, imageMediaType, url, pastedText }),
+    });
+  } catch (e) {
+    throw new Error('network error reaching /api/extract-recipe');
+  }
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error(`the server didn't return JSON (HTTP ${res.status}) — check Vercel function logs`);
+  }
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
   const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
   const clean = text.replace(/```json|```/g, '').trim();
   const jsonStart = clean.indexOf('{');
   const jsonEnd = clean.lastIndexOf('}');
-  if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON in response');
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error('response had no JSON in it');
   return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
 }
 
@@ -350,6 +378,7 @@ function RecipeFormModal({ initial, onClose, onSave }) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
   const [aiFilled, setAiFilled] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   async function handleImagePick(e) {
     const file = e.target.files?.[0];
@@ -358,10 +387,52 @@ function RecipeFormModal({ initial, onClose, onSave }) {
     setAiImage({ base64, mediaType: file.type || 'image/png', previewUrl: URL.createObjectURL(file) });
   }
 
+  function applyParsedToForm(parsed) {
+    setR(prev => ({
+      ...prev,
+      name: parsed.name || prev.name,
+      servings: parsed.servings || prev.servings,
+      calories: parsed.calories ?? prev.calories,
+      protein: parsed.protein ?? prev.protein,
+      carbs: parsed.carbs ?? prev.carbs,
+      veggieServings: parsed.veggieServings ?? prev.veggieServings,
+      vegetarian: typeof parsed.vegetarian === 'boolean' ? parsed.vegetarian : prev.vegetarian,
+      tags: Array.isArray(parsed.tags) && parsed.tags.length ? parsed.tags.filter(t => TAG_LABEL[t]) : prev.tags,
+      ingredients: Array.isArray(parsed.ingredients) && parsed.ingredients.length ? parsed.ingredients : prev.ingredients,
+      instructions: parsed.instructions || prev.instructions,
+      prepAhead: parsed.prepAhead || prev.prepAhead,
+    }));
+  }
+
+  function copyPromptForAI() {
+    const prompt = buildExtractionPrompt({ pastedText: '<paste your recipe here>' });
+    navigator.clipboard?.writeText(prompt);
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2000);
+  }
+
   async function runAutofill() {
     setAiError(null);
     setAiFilled(false);
     setAiLoading(true);
+
+    // If someone pasted ready-made JSON (e.g. from asking another AI chatbot
+    // using the copied prompt), use it directly — no network call needed.
+    if (aiMode === 'text') {
+      const trimmed = aiPastedText.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          applyParsedToForm(parsed);
+          setAiFilled(true);
+          setAiLoading(false);
+          return;
+        } catch (e) {
+          /* not valid JSON — fall through to the AI request below */
+        }
+      }
+    }
+
     try {
       const parsed = await extractRecipeFromAI({
         imageBase64: aiMode === 'image' ? aiImage?.base64 : null,
@@ -369,23 +440,10 @@ function RecipeFormModal({ initial, onClose, onSave }) {
         url: aiMode === 'link' ? aiUrl.trim() : null,
         pastedText: aiMode === 'text' ? aiPastedText.trim() : null,
       });
-      setR(prev => ({
-        ...prev,
-        name: parsed.name || prev.name,
-        servings: parsed.servings || prev.servings,
-        calories: parsed.calories ?? prev.calories,
-        protein: parsed.protein ?? prev.protein,
-        carbs: parsed.carbs ?? prev.carbs,
-        veggieServings: parsed.veggieServings ?? prev.veggieServings,
-        vegetarian: typeof parsed.vegetarian === 'boolean' ? parsed.vegetarian : prev.vegetarian,
-        tags: Array.isArray(parsed.tags) && parsed.tags.length ? parsed.tags.filter(t => TAG_LABEL[t]) : prev.tags,
-        ingredients: Array.isArray(parsed.ingredients) && parsed.ingredients.length ? parsed.ingredients : prev.ingredients,
-        instructions: parsed.instructions || prev.instructions,
-        prepAhead: parsed.prepAhead || prev.prepAhead,
-      }));
+      applyParsedToForm(parsed);
       setAiFilled(true);
     } catch (e) {
-      setAiError("Couldn't read that automatically — try a clearer screenshot, a different link, or fill in the details below by hand.");
+      setAiError(`Couldn't read that automatically — ${e.message || 'unknown error'}. You can try again, paste JSON from another AI chatbot instead (see "copy a prompt" below), or fill in the details by hand.`);
     } finally {
       setAiLoading(false);
     }
@@ -462,9 +520,14 @@ function RecipeFormModal({ initial, onClose, onSave }) {
             </div>
 
             {aiMode === 'text' && (
-              <textarea value={aiPastedText} onChange={e => setAiPastedText(e.target.value)} rows={6}
-                placeholder="Paste the whole recipe here — ingredients, method, whatever you've got. It doesn't need to be tidy."
-                className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
+              <div>
+                <textarea value={aiPastedText} onChange={e => setAiPastedText(e.target.value)} rows={6}
+                  placeholder="Paste the whole recipe here — ingredients, method, whatever you've got. It doesn't need to be tidy. (Or paste ready-made JSON from another AI chatbot — see below.)"
+                  className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
+                <button onClick={copyPromptForAI} type="button" className="text-xs mt-1.5" style={{ fontFamily: FONT_BODY, color: COLORS.forest, textDecoration: 'underline' }}>
+                  {promptCopied ? 'Copied! Paste into any AI chatbot, then paste its answer above.' : "Prefer to use ChatGPT/Claude/etc yourself? Copy a ready-made prompt"}
+                </button>
+              </div>
             )}
             {aiMode === 'image' && (
               <div className="flex items-center gap-3">
