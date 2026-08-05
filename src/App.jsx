@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Book, Plus, X, Shuffle, ShoppingCart, Leaf, Share2, Copy, Trash2, Pencil, Clock, ChefHat, NotebookText, Coffee, Sandwich, UtensilsCrossed, Cookie, Sprout, ArrowRight } from 'lucide-react';
+import { Book, Plus, X, Shuffle, ShoppingCart, Leaf, Share2, Copy, Trash2, Pencil, Clock, ChefHat, NotebookText, Coffee, Sandwich, UtensilsCrossed, Cookie, Sprout, ArrowRight, Image as ImageIcon, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
 
 /* ---------------------------------- tokens ---------------------------------- */
 
@@ -24,7 +24,7 @@ const COLORS = {
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Libre Baskerville', Georgia, serif";
-const FONT_STAMP = "'Special Elite', 'Courier New', monospace";
+const FONT_STAMP = "'Inter', -apple-system, sans-serif";
 
 const TAGS = [
   { key: 'weekdayBreakfast', label: 'Weekday Breakfast' },
@@ -58,6 +58,34 @@ const SLOT_DEFS = {
 
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function round1(n) { return Math.round((n + Number.EPSILON) * 10) / 10; }
+
+const TAG_KEY_LIST = TAGS.map(t => t.key).join(', ');
+const CATEGORY_LIST = CATEGORIES.join(', ');
+
+async function extractRecipeFromAI({ imageBase64, imageMediaType, url, pastedText }) {
+  const res = await fetch('/api/extract-recipe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64, imageMediaType, url, pastedText }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const clean = text.replace(/```json|```/g, '').trim();
+  const jsonStart = clean.indexOf('{');
+  const jsonEnd = clean.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON in response');
+  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 /* ---------------------------------- seed data ---------------------------------- */
 
@@ -231,23 +259,29 @@ function useStoredState(key, initial) {
 
 /* ---------------------------------- small ui bits ---------------------------------- */
 
-function Stamp({ children, color = COLORS.forest }) {
+const CHIP_TONES = {
+  sage: { bg: '#EEF1E4', text: COLORS.forest },
+  clay: { bg: '#F7E9E0', text: COLORS.oxblood },
+};
+
+function Stamp({ children, tone = 'sage', icon: Icon = null }) {
+  const t = CHIP_TONES[tone];
   return (
     <span
       style={{
-        fontFamily: FONT_STAMP,
-        fontSize: 10,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        color,
-        border: `1px solid ${color}`,
-        borderRadius: 3,
-        padding: '2px 6px',
-        display: 'inline-block',
-        background: 'rgba(255,255,255,0.35)',
-        transform: 'rotate(-1deg)',
+        fontFamily: FONT_BODY,
+        fontSize: 11,
+        color: t.text,
+        background: t.bg,
+        borderRadius: 6,
+        padding: '3px 9px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        lineHeight: 1.3,
       }}
     >
+      {Icon && <Icon size={11} />}
       {children}
     </span>
   );
@@ -309,6 +343,53 @@ function emptyRecipe(presetTag, vegetarian) {
 
 function RecipeFormModal({ initial, onClose, onSave }) {
   const [r, setR] = useState(initial);
+  const [aiMode, setAiMode] = useState('text');
+  const [aiUrl, setAiUrl] = useState('');
+  const [aiPastedText, setAiPastedText] = useState('');
+  const [aiImage, setAiImage] = useState(null); // {base64, mediaType, previewUrl}
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [aiFilled, setAiFilled] = useState(false);
+
+  async function handleImagePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const base64 = await fileToBase64(file);
+    setAiImage({ base64, mediaType: file.type || 'image/png', previewUrl: URL.createObjectURL(file) });
+  }
+
+  async function runAutofill() {
+    setAiError(null);
+    setAiFilled(false);
+    setAiLoading(true);
+    try {
+      const parsed = await extractRecipeFromAI({
+        imageBase64: aiMode === 'image' ? aiImage?.base64 : null,
+        imageMediaType: aiMode === 'image' ? aiImage?.mediaType : null,
+        url: aiMode === 'link' ? aiUrl.trim() : null,
+        pastedText: aiMode === 'text' ? aiPastedText.trim() : null,
+      });
+      setR(prev => ({
+        ...prev,
+        name: parsed.name || prev.name,
+        servings: parsed.servings || prev.servings,
+        calories: parsed.calories ?? prev.calories,
+        protein: parsed.protein ?? prev.protein,
+        carbs: parsed.carbs ?? prev.carbs,
+        veggieServings: parsed.veggieServings ?? prev.veggieServings,
+        vegetarian: typeof parsed.vegetarian === 'boolean' ? parsed.vegetarian : prev.vegetarian,
+        tags: Array.isArray(parsed.tags) && parsed.tags.length ? parsed.tags.filter(t => TAG_LABEL[t]) : prev.tags,
+        ingredients: Array.isArray(parsed.ingredients) && parsed.ingredients.length ? parsed.ingredients : prev.ingredients,
+        instructions: parsed.instructions || prev.instructions,
+        prepAhead: parsed.prepAhead || prev.prepAhead,
+      }));
+      setAiFilled(true);
+    } catch (e) {
+      setAiError("Couldn't read that automatically — try a clearer screenshot, a different link, or fill in the details below by hand.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   function setField(field, value) { setR(prev => ({ ...prev, [field]: value })); }
   function toggleTag(tagKey) {
@@ -359,6 +440,60 @@ function RecipeFormModal({ initial, onClose, onSave }) {
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          <div className="rounded-lg p-4" style={{ background: '#F3F4EC', border: `1px dashed ${COLORS.cardEdge}` }}>
+            <div className="flex items-center gap-1.5 mb-3">
+              <Sparkles size={15} color={COLORS.forest} />
+              <span style={{ fontFamily: FONT_STAMP, color: COLORS.forest, fontSize: 12 }}>FILL IN AUTOMATICALLY</span>
+            </div>
+
+            <div className="flex rounded-md overflow-hidden mb-3 w-fit" style={{ border: `1px solid ${COLORS.cardEdge}` }}>
+              <button onClick={() => setAiMode('text')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                style={{ fontFamily: FONT_BODY, background: aiMode === 'text' ? COLORS.forest : COLORS.cream, color: aiMode === 'text' ? COLORS.cream : COLORS.inkSoft }}>
+                <NotebookText size={13} /> Paste text
+              </button>
+              <button onClick={() => setAiMode('image')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                style={{ fontFamily: FONT_BODY, background: aiMode === 'image' ? COLORS.forest : COLORS.cream, color: aiMode === 'image' ? COLORS.cream : COLORS.inkSoft }}>
+                <ImageIcon size={13} /> Screenshot
+              </button>
+              <button onClick={() => setAiMode('link')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
+                style={{ fontFamily: FONT_BODY, background: aiMode === 'link' ? COLORS.forest : COLORS.cream, color: aiMode === 'link' ? COLORS.cream : COLORS.inkSoft }}>
+                <LinkIcon size={13} /> Link
+              </button>
+            </div>
+
+            {aiMode === 'text' && (
+              <textarea value={aiPastedText} onChange={e => setAiPastedText(e.target.value)} rows={6}
+                placeholder="Paste the whole recipe here — ingredients, method, whatever you've got. It doesn't need to be tidy."
+                className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
+            )}
+            {aiMode === 'image' && (
+              <div className="flex items-center gap-3">
+                <label className="px-3 py-1.5 rounded text-xs cursor-pointer" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }}>
+                  Choose image
+                  <input type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
+                </label>
+                {aiImage && <img src={aiImage.previewUrl} alt="preview" className="h-10 w-10 object-cover rounded" />}
+              </div>
+            )}
+            {aiMode === 'link' && (
+              <input value={aiUrl} onChange={e => setAiUrl(e.target.value)} placeholder="https://…"
+                className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
+            )}
+
+            <button
+              onClick={runAutofill}
+              disabled={aiLoading || (aiMode === 'image' ? !aiImage : aiMode === 'link' ? !aiUrl.trim() : !aiPastedText.trim())}
+              className="mt-3 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm disabled:opacity-40"
+              style={{ fontFamily: FONT_STAMP, fontWeight: 600, background: COLORS.forest, color: COLORS.cream }}
+            >
+              {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              {aiLoading ? 'Reading recipe…' : 'Auto-fill details'}
+            </button>
+
+            {aiFilled && <p className="text-xs mt-2" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>Filled in below — have a quick look before saving.</p>}
+            {aiError && <p className="text-xs mt-2" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{aiError}</p>}
+          </div>
+
           <div>
             <label className="block text-xs mb-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>RECIPE NAME</label>
             <input
@@ -388,12 +523,11 @@ function RecipeFormModal({ initial, onClose, onSave }) {
                 <button
                   key={t.key}
                   onClick={() => toggleTag(t.key)}
-                  className="px-2.5 py-1 rounded-full text-xs"
+                  className="px-3 py-1 rounded-md text-xs border-0"
                   style={{
-                    fontFamily: FONT_STAMP,
-                    border: `1.5px solid ${COLORS.oxblood}`,
-                    background: r.tags.includes(t.key) ? COLORS.oxblood : 'transparent',
-                    color: r.tags.includes(t.key) ? COLORS.cream : COLORS.oxblood,
+                    fontFamily: FONT_BODY,
+                    background: r.tags.includes(t.key) ? COLORS.forest : '#EEF1E4',
+                    color: r.tags.includes(t.key) ? COLORS.cream : COLORS.forest,
                   }}
                 >
                   {t.label}
@@ -512,7 +646,7 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
         </h4>
 
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {recipe.vegetarian && <Stamp color={COLORS.oxblood}>Veg</Stamp>}
+          {recipe.vegetarian && <Stamp tone="clay" icon={Leaf}>Veg</Stamp>}
           {recipe.tags.map(t => <Stamp key={t}>{TAG_LABEL[t]}</Stamp>)}
         </div>
 
@@ -610,12 +744,11 @@ function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setV
       <div className="flex flex-wrap gap-2 mb-5">
         {TAGS.map(t => (
           <button key={t.key} onClick={() => toggleFilterTag(t.key)}
-            className="px-2.5 py-1 rounded-full text-xs"
+            className="px-3 py-1 rounded-md text-xs border-0"
             style={{
-              fontFamily: FONT_STAMP,
-              border: `1.5px solid ${COLORS.mustard}`,
-              background: activeTags.includes(t.key) ? COLORS.mustard : 'transparent',
-              color: activeTags.includes(t.key) ? COLORS.cream : COLORS.mustard,
+              fontFamily: FONT_BODY,
+              background: activeTags.includes(t.key) ? COLORS.oxblood : '#F7E9E0',
+              color: activeTags.includes(t.key) ? COLORS.cream : COLORS.oxblood,
             }}>
             {t.label}
           </button>
@@ -640,6 +773,7 @@ function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setV
 function ToTryTab({ toTry, setToTry, onPromote }) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
+  const [promotingId, setPromotingId] = useState(null);
 
   function addEntry() {
     if (!text.trim()) return;
@@ -647,6 +781,11 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
     setTitle(''); setText('');
   }
   function removeEntry(id) { setToTry(prev => prev.filter(e => e.id !== id)); }
+  async function handlePromote(entry) {
+    setPromotingId(entry.id);
+    await onPromote(entry);
+    setPromotingId(null);
+  }
 
   return (
     <div>
@@ -672,9 +811,10 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
             <div className="flex items-start justify-between gap-2 mb-1">
               <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink }} className="text-base font-bold">{entry.title}</h4>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => onPromote(entry)} className="text-xs px-2 py-1 rounded"
+                <button onClick={() => handlePromote(entry)} disabled={promotingId === entry.id} className="text-xs px-2 py-1 rounded flex items-center gap-1 disabled:opacity-60"
                   style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-                  Promote to Bank
+                  {promotingId === entry.id && <Loader2 size={12} className="animate-spin" />}
+                  {promotingId === entry.id ? 'Reading…' : 'Promote to Bank'}
                 </button>
                 <button onClick={() => removeEntry(entry.id)}><Trash2 size={15} color={COLORS.oxblood} /></button>
               </div>
@@ -984,10 +1124,26 @@ export default function App() {
   function openInlineAdd(tag, shopType, slotId) {
     setModal({ recipe: emptyRecipe(tag, settings.vegOnly), afterSave: { shopType, slotId } });
   }
-  function openPromote(entry) {
+  async function openPromote(entry) {
     const r = emptyRecipe(null, undefined);
     r.name = entry.title;
     r.instructions = entry.text;
+    try {
+      const parsed = await extractRecipeFromAI({ pastedText: entry.text });
+      if (parsed.name) r.name = parsed.name;
+      if (parsed.servings) r.servings = parsed.servings;
+      if (parsed.calories != null) r.calories = parsed.calories;
+      if (parsed.protein != null) r.protein = parsed.protein;
+      if (parsed.carbs != null) r.carbs = parsed.carbs;
+      if (parsed.veggieServings != null) r.veggieServings = parsed.veggieServings;
+      if (typeof parsed.vegetarian === 'boolean') r.vegetarian = parsed.vegetarian;
+      if (Array.isArray(parsed.tags) && parsed.tags.length) r.tags = parsed.tags.filter(t => TAG_LABEL[t]);
+      if (Array.isArray(parsed.ingredients) && parsed.ingredients.length) r.ingredients = parsed.ingredients;
+      if (parsed.instructions) r.instructions = parsed.instructions;
+      if (parsed.prepAhead) r.prepAhead = parsed.prepAhead;
+    } catch (e) {
+      /* AI parsing unavailable — the raw clipping is still in place for manual editing */
+    }
     setModal({ recipe: r, afterSave: null, promoteId: entry.id });
   }
 
@@ -1031,7 +1187,7 @@ export default function App() {
   return (
     <div style={{ background: COLORS.paper, minHeight: '100%' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
       `}</style>
 
       <div className="text-center pt-8 pb-5 px-4">
