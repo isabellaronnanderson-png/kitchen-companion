@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Book, Plus, X, Shuffle, ShoppingCart, Leaf, Share2, Copy, Trash2, Pencil, Clock, ChefHat, NotebookText, Coffee, Sandwich, UtensilsCrossed, Cookie, Sprout, ArrowRight, Image as ImageIcon, Link as LinkIcon, Sparkles, Loader2 } from 'lucide-react';
+import { Book, Plus, X, Shuffle, ShoppingCart, Leaf, Share2, Copy, Trash2, Pencil, Clock, ChefHat, NotebookText, Coffee, Sandwich, UtensilsCrossed, Cookie, Sprout, ArrowRight, Image as ImageIcon } from 'lucide-react';
 
 /* ---------------------------------- tokens ---------------------------------- */
 
@@ -59,57 +59,24 @@ const SLOT_DEFS = {
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function round1(n) { return Math.round((n + Number.EPSILON) * 10) / 10; }
 
-const TAG_KEY_LIST = TAGS.map(t => t.key).join(', ');
-const CATEGORY_LIST = CATEGORIES.join(', ');
-
-function buildExtractionPrompt({ hasImage, url, pastedText }) {
-  let prompt = `You are helping fill in a recipe card. Read the recipe from the ${hasImage ? 'attached screenshot' : url ? 'linked page' : 'text'} below and respond with ONLY raw JSON, no markdown fences, no commentary, matching exactly this shape:
-{"name":string,"servings":number,"calories":number,"protein":number,"carbs":number,"veggieServings":number,"vegetarian":boolean,"tags":string[],"ingredients":[{"name":string,"qty":number,"unit":string,"category":string}],"instructions":string,"prepAhead":string}
-
-Rules:
-- calories/protein/carbs are PER SERVING best estimates (numbers, not strings).
-- veggieServings is a rough per-serving count of vegetable servings (can be a decimal like 1.5).
-- tags: choose any that reasonably fit from exactly these keys: ${TAG_KEY_LIST}.
-- ingredients[].category must be one of: ${CATEGORY_LIST}.
-- instructions should be a short, clear method in a few sentences.
-- prepAhead: one short sentence on what can be made ahead, or "" if not applicable.
-- If exact nutrition isn't stated, estimate sensibly from the ingredients rather than leaving fields at 0.
-- Never leave "ingredients" empty if any are visible or inferable.`;
-  if (url) prompt += `\n\nURL: ${url}`;
-  if (pastedText) prompt += `\n\nRecipe text:\n${pastedText}`;
-  return prompt;
-}
-
-async function extractRecipeFromAI({ imageBase64, imageMediaType, url, pastedText }) {
-  let res;
-  try {
-    res = await fetch('/api/extract-recipe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageBase64, imageMediaType, url, pastedText }),
-    });
-  } catch (e) {
-    throw new Error('network error reaching /api/extract-recipe');
-  }
-  let data;
-  try {
-    data = await res.json();
-  } catch (e) {
-    throw new Error(`the server didn't return JSON (HTTP ${res.status}) — check Vercel function logs`);
-  }
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
-  const clean = text.replace(/```json|```/g, '').trim();
-  const jsonStart = clean.indexOf('{');
-  const jsonEnd = clean.lastIndexOf('}');
-  if (jsonStart === -1 || jsonEnd === -1) throw new Error('response had no JSON in it');
-  return JSON.parse(clean.slice(jsonStart, jsonEnd + 1));
-}
-
-function fileToBase64(file) {
+function fileToResizedDataUrl(file, maxDim = 640, quality = 0.82) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+        else if (height >= width && height > maxDim) { width = Math.round(width * (maxDim / height)); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -365,87 +332,23 @@ function emptyRecipe(presetTag, vegetarian) {
     calories: '', protein: '', carbs: '', veggieServings: '',
     tags: presetTag ? [presetTag] : [],
     ingredients: [{ name: '', qty: '', unit: '', category: 'Produce' }],
-    instructions: '', prepAhead: '', notes: '',
+    instructions: '', prepAhead: '', notes: '', image: null,
   };
 }
 
 function RecipeFormModal({ initial, onClose, onSave }) {
   const [r, setR] = useState(initial);
-  const [aiMode, setAiMode] = useState('text');
-  const [aiUrl, setAiUrl] = useState('');
-  const [aiPastedText, setAiPastedText] = useState('');
-  const [aiImage, setAiImage] = useState(null); // {base64, mediaType, previewUrl}
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-  const [aiFilled, setAiFilled] = useState(false);
-  const [promptCopied, setPromptCopied] = useState(false);
+  const [photoError, setPhotoError] = useState(null);
 
-  async function handleImagePick(e) {
+  async function handlePhotoPick(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const base64 = await fileToBase64(file);
-    setAiImage({ base64, mediaType: file.type || 'image/png', previewUrl: URL.createObjectURL(file) });
-  }
-
-  function applyParsedToForm(parsed) {
-    setR(prev => ({
-      ...prev,
-      name: parsed.name || prev.name,
-      servings: parsed.servings || prev.servings,
-      calories: parsed.calories ?? prev.calories,
-      protein: parsed.protein ?? prev.protein,
-      carbs: parsed.carbs ?? prev.carbs,
-      veggieServings: parsed.veggieServings ?? prev.veggieServings,
-      vegetarian: typeof parsed.vegetarian === 'boolean' ? parsed.vegetarian : prev.vegetarian,
-      tags: Array.isArray(parsed.tags) && parsed.tags.length ? parsed.tags.filter(t => TAG_LABEL[t]) : prev.tags,
-      ingredients: Array.isArray(parsed.ingredients) && parsed.ingredients.length ? parsed.ingredients : prev.ingredients,
-      instructions: parsed.instructions || prev.instructions,
-      prepAhead: parsed.prepAhead || prev.prepAhead,
-    }));
-  }
-
-  function copyPromptForAI() {
-    const prompt = buildExtractionPrompt({ pastedText: '<paste your recipe here>' });
-    navigator.clipboard?.writeText(prompt);
-    setPromptCopied(true);
-    setTimeout(() => setPromptCopied(false), 2000);
-  }
-
-  async function runAutofill() {
-    setAiError(null);
-    setAiFilled(false);
-    setAiLoading(true);
-
-    // If someone pasted ready-made JSON (e.g. from asking another AI chatbot
-    // using the copied prompt), use it directly — no network call needed.
-    if (aiMode === 'text') {
-      const trimmed = aiPastedText.trim();
-      if (trimmed.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          applyParsedToForm(parsed);
-          setAiFilled(true);
-          setAiLoading(false);
-          return;
-        } catch (e) {
-          /* not valid JSON — fall through to the AI request below */
-        }
-      }
-    }
-
+    setPhotoError(null);
     try {
-      const parsed = await extractRecipeFromAI({
-        imageBase64: aiMode === 'image' ? aiImage?.base64 : null,
-        imageMediaType: aiMode === 'image' ? aiImage?.mediaType : null,
-        url: aiMode === 'link' ? aiUrl.trim() : null,
-        pastedText: aiMode === 'text' ? aiPastedText.trim() : null,
-      });
-      applyParsedToForm(parsed);
-      setAiFilled(true);
-    } catch (e) {
-      setAiError(`Couldn't read that automatically — ${e.message || 'unknown error'}. You can try again, paste JSON from another AI chatbot instead (see "copy a prompt" below), or fill in the details by hand.`);
-    } finally {
-      setAiLoading(false);
+      const dataUrl = await fileToResizedDataUrl(file);
+      setR(prev => ({ ...prev, image: dataUrl }));
+    } catch (err) {
+      setPhotoError("Couldn't load that image — try a different file.");
     }
   }
 
@@ -498,63 +401,24 @@ function RecipeFormModal({ initial, onClose, onSave }) {
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          <div className="rounded-lg p-4" style={{ background: '#F3F4EC', border: `1px dashed ${COLORS.cardEdge}` }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <Sparkles size={15} color={COLORS.forest} />
-              <span style={{ fontFamily: FONT_STAMP, color: COLORS.forest, fontSize: 12 }}>FILL IN AUTOMATICALLY</span>
-            </div>
-
-            <div className="flex rounded-md overflow-hidden mb-3 w-fit" style={{ border: `1px solid ${COLORS.cardEdge}` }}>
-              <button onClick={() => setAiMode('text')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                style={{ fontFamily: FONT_BODY, background: aiMode === 'text' ? COLORS.forest : COLORS.cream, color: aiMode === 'text' ? COLORS.cream : COLORS.inkSoft }}>
-                <NotebookText size={13} /> Paste text
-              </button>
-              <button onClick={() => setAiMode('image')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                style={{ fontFamily: FONT_BODY, background: aiMode === 'image' ? COLORS.forest : COLORS.cream, color: aiMode === 'image' ? COLORS.cream : COLORS.inkSoft }}>
-                <ImageIcon size={13} /> Screenshot
-              </button>
-              <button onClick={() => setAiMode('link')} className="flex items-center gap-1 px-3 py-1.5 text-xs"
-                style={{ fontFamily: FONT_BODY, background: aiMode === 'link' ? COLORS.forest : COLORS.cream, color: aiMode === 'link' ? COLORS.cream : COLORS.inkSoft }}>
-                <LinkIcon size={13} /> Link
-              </button>
-            </div>
-
-            {aiMode === 'text' && (
-              <div>
-                <textarea value={aiPastedText} onChange={e => setAiPastedText(e.target.value)} rows={6}
-                  placeholder="Paste the whole recipe here — ingredients, method, whatever you've got. It doesn't need to be tidy. (Or paste ready-made JSON from another AI chatbot — see below.)"
-                  className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
-                <button onClick={copyPromptForAI} type="button" className="text-xs mt-1.5" style={{ fontFamily: FONT_BODY, color: COLORS.forest, textDecoration: 'underline' }}>
-                  {promptCopied ? 'Copied! Paste into any AI chatbot, then paste its answer above.' : "Prefer to use ChatGPT/Claude/etc yourself? Copy a ready-made prompt"}
-                </button>
+          <div className="flex items-center gap-3">
+            {r.image ? (
+              <img src={r.image} alt="" className="w-16 h-16 object-cover rounded" style={{ border: `1px solid ${COLORS.cardEdge}` }} />
+            ) : (
+              <div className="w-16 h-16 rounded flex items-center justify-center" style={{ background: '#F3F4EC' }}>
+                <ImageIcon size={20} color={COLORS.forest} />
               </div>
             )}
-            {aiMode === 'image' && (
-              <div className="flex items-center gap-3">
-                <label className="px-3 py-1.5 rounded text-xs cursor-pointer" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }}>
-                  Choose image
-                  <input type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
-                </label>
-                {aiImage && <img src={aiImage.previewUrl} alt="preview" className="h-10 w-10 object-cover rounded" />}
-              </div>
-            )}
-            {aiMode === 'link' && (
-              <input value={aiUrl} onChange={e => setAiUrl(e.target.value)} placeholder="https://…"
-                className="w-full px-3 py-2 rounded text-sm" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
-            )}
-
-            <button
-              onClick={runAutofill}
-              disabled={aiLoading || (aiMode === 'image' ? !aiImage : aiMode === 'link' ? !aiUrl.trim() : !aiPastedText.trim())}
-              className="mt-3 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm disabled:opacity-40"
-              style={{ fontFamily: FONT_STAMP, fontWeight: 600, background: COLORS.forest, color: COLORS.cream }}
-            >
-              {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-              {aiLoading ? 'Reading recipe…' : 'Auto-fill details'}
-            </button>
-
-            {aiFilled && <p className="text-xs mt-2" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>Filled in below — have a quick look before saving.</p>}
-            {aiError && <p className="text-xs mt-2" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{aiError}</p>}
+            <div>
+              <label className="px-3 py-1.5 rounded text-xs cursor-pointer inline-block" style={{ fontFamily: FONT_BODY, border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }}>
+                {r.image ? 'Change photo' : 'Add a photo'}
+                <input type="file" accept="image/*" onChange={handlePhotoPick} className="hidden" />
+              </label>
+              {r.image && (
+                <button onClick={() => setField('image', null)} className="text-xs ml-2" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>Remove</button>
+              )}
+              {photoError && <p className="text-xs mt-1" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{photoError}</p>}
+            </div>
           </div>
 
           <div>
@@ -695,13 +559,23 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
       className="rounded-lg overflow-hidden relative w-full mb-5 transition-shadow hover:shadow-lg"
       style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, boxShadow: '0 2px 8px rgba(44,43,34,0.06)', breakInside: 'avoid', display: 'inline-block' }}
     >
-      <div className="flex items-center justify-between px-4 py-5" style={{ background: bandColor }}>
-        <BandIcon size={26} color={COLORS.cream} />
-        <div className="flex gap-2">
-          <button onClick={() => onEdit(recipe)}><Pencil size={15} color={COLORS.cream} /></button>
-          <button onClick={() => onDelete(recipe.id)}><Trash2 size={15} color={COLORS.cream} /></button>
+      {recipe.image ? (
+        <div className="relative">
+          <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 150 }} />
+          <div className="absolute top-2 right-2 flex gap-1">
+            <button onClick={() => onEdit(recipe)} className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.85)' }}><Pencil size={13} color={COLORS.inkSoft} /></button>
+            <button onClick={() => onDelete(recipe.id)} className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.85)' }}><Trash2 size={13} color={COLORS.oxblood} /></button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between px-4 py-5" style={{ background: bandColor }}>
+          <BandIcon size={26} color={COLORS.cream} />
+          <div className="flex gap-2">
+            <button onClick={() => onEdit(recipe)}><Pencil size={15} color={COLORS.cream} /></button>
+            <button onClick={() => onDelete(recipe.id)}><Trash2 size={15} color={COLORS.cream} /></button>
+          </div>
+        </div>
+      )}
 
       <div className="p-4">
         <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-lg leading-tight mb-2">
@@ -748,7 +622,7 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
             className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs disabled:opacity-40"
             style={{ fontFamily: FONT_STAMP, border: `1.5px solid ${COLORS.forest}`, color: COLORS.forest }}
           >
-            {sentLabel ? `Added → ${sentLabel}` : <>Send to Meal Plan <ArrowRight size={13} /></>}
+            {sentLabel ? `Added → ${sentLabel}` : <>Plan for this week <ArrowRight size={13} /></>}
           </button>
 
           {menuOpen && (
@@ -771,7 +645,7 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
 
 /* ---------------------------------- bank tab ---------------------------------- */
 
-function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setVegOnly }) {
+function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState([]);
 
@@ -788,20 +662,11 @@ function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setV
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <SectionTitle icon={Book}>The Recipe Bank</SectionTitle>
-        <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm"
-          style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-          <Plus size={15} /> Add Recipe
-        </button>
-      </div>
-
       <div className="flex flex-wrap gap-3 items-center mb-4">
         <input
           value={search} onChange={e => setSearch(e.target.value)} placeholder="search recipes…"
           className="px-3 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_BODY }}
         />
-        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian only" />
       </div>
 
       <div className="flex flex-wrap gap-2 mb-5">
@@ -831,12 +696,31 @@ function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setV
   );
 }
 
+function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setVegOnly }) {
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <SectionTitle icon={Book}>The Recipe Bank</SectionTitle>
+        <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm"
+          style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+          <Plus size={15} /> Add Recipe
+        </button>
+      </div>
+
+      <div className="mb-4">
+        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian only" />
+      </div>
+
+      <RecipeGallery recipes={recipes} vegOnly={vegOnly} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
+    </div>
+  );
+}
+
 /* ---------------------------------- to try tab ---------------------------------- */
 
 function ToTryTab({ toTry, setToTry, onPromote }) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
-  const [promotingId, setPromotingId] = useState(null);
 
   function addEntry() {
     if (!text.trim()) return;
@@ -844,11 +728,6 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
     setTitle(''); setText('');
   }
   function removeEntry(id) { setToTry(prev => prev.filter(e => e.id !== id)); }
-  async function handlePromote(entry) {
-    setPromotingId(entry.id);
-    await onPromote(entry);
-    setPromotingId(null);
-  }
 
   return (
     <div>
@@ -874,10 +753,9 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
             <div className="flex items-start justify-between gap-2 mb-1">
               <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink }} className="text-base font-bold">{entry.title}</h4>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => handlePromote(entry)} disabled={promotingId === entry.id} className="text-xs px-2 py-1 rounded flex items-center gap-1 disabled:opacity-60"
+                <button onClick={() => onPromote(entry)} className="text-xs px-2 py-1 rounded"
                   style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-                  {promotingId === entry.id && <Loader2 size={12} className="animate-spin" />}
-                  {promotingId === entry.id ? 'Reading…' : 'Promote to Bank'}
+                  Promote to Bank
                 </button>
                 <button onClick={() => removeEntry(entry.id)}><Trash2 size={15} color={COLORS.oxblood} /></button>
               </div>
@@ -892,7 +770,7 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
 
 /* ---------------------------------- plan tab ---------------------------------- */
 
-function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, openInlineAdd }) {
+function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit, onDelete, onSendToPlan, onAdd }) {
   const shopType = settings.shopType;
   const defs = SLOT_DEFS[shopType];
   const planForShop = mealPlan[shopType] || {};
@@ -975,16 +853,15 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, openIn
         <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>clear this plan</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
         <div className="lg:col-span-2 space-y-4">
           {defs.map(def => {
             const slot = planForShop[def.id] || {};
             const times = slot.times ?? def.defaultTimes;
-            const options = recipes.filter(r => r.tags.includes(def.tag) && (!settings.vegOnly || r.vegetarian));
             const chosen = recipes.find(r => r.id === slot.recipeId);
             return (
               <div key={def.id} className="rounded p-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}` }}>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <span style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood, fontSize: 13 }}>{def.label}</span>
                   <div className="flex items-center gap-2">
                     <label className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>times this period</label>
@@ -992,24 +869,31 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, openIn
                       className="w-16 px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <select value={slot.recipeId || ''} onChange={e => setSlot(def.id, 'recipeId', e.target.value || null)}
-                    className="flex-1 min-w-[180px] px-3 py-2 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_BODY }}>
-                    <option value="">— choose from the bank —</option>
-                    {options.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                  </select>
-                  <button onClick={() => openInlineAdd(def.tag, shopType, def.id)} className="text-xs px-2 py-2 rounded flex items-center gap-1"
-                    style={{ fontFamily: FONT_STAMP, border: `1px solid ${COLORS.forest}`, color: COLORS.forest }}>
-                    <Plus size={13} /> new
-                  </button>
-                </div>
-                {chosen?.prepAhead && (
-                  <div className="flex items-start gap-1 text-xs mt-2" style={{ color: COLORS.mustard, fontFamily: FONT_BODY }}>
-                    <Clock size={13} className="mt-0.5 shrink-0" /> <span>{chosen.prepAhead}</span>
+
+                {chosen ? (
+                  <div className="flex items-center gap-3">
+                    {chosen.image ? (
+                      <img src={chosen.image} alt="" className="w-14 h-14 object-cover rounded" />
+                    ) : (
+                      <div className="w-14 h-14 rounded flex items-center justify-center shrink-0" style={{ background: bandForRecipe(chosen).color }}>
+                        {React.createElement(bandForRecipe(chosen).Icon, { size: 20, color: COLORS.cream })}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-base truncate">{chosen.name}</p>
+                      <p className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>{chosen.calories} kcal · {chosen.protein}g protein</p>
+                      {chosen.prepAhead && (
+                        <div className="flex items-start gap-1 text-xs mt-1" style={{ color: COLORS.mustard, fontFamily: FONT_BODY }}>
+                          <Clock size={12} className="mt-0.5 shrink-0" /> <span>{chosen.prepAhead}</span>
+                        </div>
+                      )}
+                    </div>
+                    <button onClick={() => setSlot(def.id, 'recipeId', null)} className="shrink-0" title="Clear"><X size={16} color={COLORS.inkSoft} /></button>
                   </div>
-                )}
-                {options.length === 0 && (
-                  <p className="text-xs mt-2" style={{ color: COLORS.inkSoft, fontFamily: FONT_BODY }}>No matching recipes yet — add one with "new".</p>
+                ) : (
+                  <p className="text-sm italic" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+                    Not planned yet — pick one from the gallery below.
+                  </p>
                 )}
               </div>
             );
@@ -1046,6 +930,22 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, openIn
             A loose guide, not a strict count — enough to sense-check the week.
           </p>
         </div>
+      </div>
+
+      <div className="pt-2" style={{ borderTop: `1px solid ${COLORS.cardEdge}` }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-8 mb-2">
+          <div>
+            <h3 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-xl">Recipe Gallery</h3>
+            <p className="text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+              Scroll through the bank and tap "Plan for this week" to slot a recipe straight in.
+            </p>
+          </div>
+          <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm shrink-0"
+            style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            <Plus size={15} /> Add Recipe
+          </button>
+        </div>
+        <RecipeGallery recipes={recipes} vegOnly={settings.vegOnly} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
       </div>
     </div>
   );
@@ -1184,29 +1084,10 @@ export default function App() {
 
   function openAdd() { setModal({ recipe: emptyRecipe(null, !settings.vegOnly ? undefined : true), afterSave: null }); }
   function openEdit(recipe) { setModal({ recipe, afterSave: null }); }
-  function openInlineAdd(tag, shopType, slotId) {
-    setModal({ recipe: emptyRecipe(tag, settings.vegOnly), afterSave: { shopType, slotId } });
-  }
-  async function openPromote(entry) {
+  function openPromote(entry) {
     const r = emptyRecipe(null, undefined);
     r.name = entry.title;
     r.instructions = entry.text;
-    try {
-      const parsed = await extractRecipeFromAI({ pastedText: entry.text });
-      if (parsed.name) r.name = parsed.name;
-      if (parsed.servings) r.servings = parsed.servings;
-      if (parsed.calories != null) r.calories = parsed.calories;
-      if (parsed.protein != null) r.protein = parsed.protein;
-      if (parsed.carbs != null) r.carbs = parsed.carbs;
-      if (parsed.veggieServings != null) r.veggieServings = parsed.veggieServings;
-      if (typeof parsed.vegetarian === 'boolean') r.vegetarian = parsed.vegetarian;
-      if (Array.isArray(parsed.tags) && parsed.tags.length) r.tags = parsed.tags.filter(t => TAG_LABEL[t]);
-      if (Array.isArray(parsed.ingredients) && parsed.ingredients.length) r.ingredients = parsed.ingredients;
-      if (parsed.instructions) r.instructions = parsed.instructions;
-      if (parsed.prepAhead) r.prepAhead = parsed.prepAhead;
-    } catch (e) {
-      /* AI parsing unavailable — the raw clipping is still in place for manual editing */
-    }
     setModal({ recipe: r, afterSave: null, promoteId: entry.id });
   }
 
@@ -1237,6 +1118,7 @@ export default function App() {
         [slotId]: { ...(prev[shopType]?.[slotId] || {}), recipeId, times: prev[shopType]?.[slotId]?.times ?? def.defaultTimes },
       },
     }));
+    setSettings(prev => ({ ...prev, shopType }));
   }
 
   if (!allLoaded) {
@@ -1291,7 +1173,17 @@ export default function App() {
 
         <div className="pb-16">
           {tab === 'plan' && (
-            <PlanTab recipes={recipes} settings={settings} setSettings={setSettings} mealPlan={mealPlan} setMealPlan={setMealPlan} openInlineAdd={openInlineAdd} />
+            <PlanTab
+              recipes={recipes}
+              settings={settings}
+              setSettings={setSettings}
+              mealPlan={mealPlan}
+              setMealPlan={setMealPlan}
+              onEdit={openEdit}
+              onDelete={handleDeleteRecipe}
+              onSendToPlan={handleSendToPlan}
+              onAdd={openAdd}
+            />
           )}
           {tab === 'bank' && (
             <BankTab
