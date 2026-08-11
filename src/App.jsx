@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Book, Plus, X, Shuffle, ShoppingCart, Leaf, Share2, Copy, Trash2, Pencil, Clock, ChefHat, NotebookText, Coffee, Sandwich, UtensilsCrossed, Cookie, Sprout, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, Shuffle, Share2, Copy, Clock, Image as ImageIcon } from 'lucide-react';
 
 /* ---------------------------------- tokens ---------------------------------- */
 
 const COLORS = {
-  paper: '#FFFFFF',
-  paperDark: '#F3F4EC',
+  paper: '#CFE7F3',
+  paperDark: '#BEDCEB',
   card: '#FFFFFF',
-  cardEdge: '#E1E5D6',
-  ink: '#2C2B22',
-  inkSoft: '#726C5C',
-  oxblood: '#B15E3F',
-  oxbloodDark: '#8E4A32',
-  forest: '#5C7048',
-  mustard: '#C7973E',
-  cream: '#FEFDF9',
-  sageLine: '#D3DAC4',
-  bandGold: '#DCB35C',
-  bandSage: '#8CA06B',
-  bandForest: '#526B41',
-  bandClay: '#C48765',
+  cardEdge: 'rgba(15,15,15,0.14)',
+  ink: '#161616',
+  inkSoft: 'rgba(22,22,22,0.6)',
+  oxblood: '#E2382A',
+  oxbloodDark: '#B92C21',
+  forest: '#3F6B4A',
+  mustard: '#3F6B4A',
+  cream: '#FFFFFF',
+  orange: '#E2382A',
+  lightBlue: '#CFE7F3',
 };
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'Libre Baskerville', Georgia, serif";
 const FONT_STAMP = "'Inter', -apple-system, sans-serif";
+const FONT_SCRIPT = "'Permanent Marker', cursive";
+const FONT_MONO = "'IBM Plex Mono', 'Courier New', monospace";
 
 const TAGS = [
   { key: 'weekdayBreakfast', label: 'Weekday Breakfast' },
@@ -254,53 +253,25 @@ function useStoredState(key, initial) {
 
 /* ---------------------------------- small ui bits ---------------------------------- */
 
-const CHIP_TONES = {
-  sage: { bg: '#EEF1E4', text: COLORS.forest },
-  clay: { bg: '#F7E9E0', text: COLORS.oxblood },
-};
+function Rule({ weight = 1, color = COLORS.oxblood, className = '' }) {
+  return <div className={className} style={{ height: weight, background: color }} />;
+}
 
-function Stamp({ children, tone = 'sage', icon: Icon = null }) {
-  const t = CHIP_TONES[tone];
+function Star({ size = 24, color = COLORS.oxblood, style = {} }) {
   return (
-    <span
-      style={{
-        fontFamily: FONT_BODY,
-        fontSize: 11,
-        color: t.text,
-        background: t.bg,
-        borderRadius: 6,
-        padding: '3px 9px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        lineHeight: 1.3,
-      }}
-    >
-      {Icon && <Icon size={11} />}
-      {children}
-    </span>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={style}>
+      <path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5 Z" />
+    </svg>
   );
 }
 
-function SprigDivider() {
+function SectionTitle({ children }) {
   return (
-    <div className="flex items-center justify-center gap-3 px-4" style={{ maxWidth: 420, margin: '0 auto' }}>
-      <span style={{ flex: 1, height: 1, background: COLORS.sageLine }} />
-      <Leaf size={13} color={COLORS.forest} style={{ transform: 'rotate(-10deg)' }} />
-      <Sprout size={15} color={COLORS.oxblood} />
-      <Leaf size={13} color={COLORS.forest} style={{ transform: 'rotate(190deg)' }} />
-      <span style={{ flex: 1, height: 1, background: COLORS.sageLine }} />
-    </div>
-  );
-}
-
-function SectionTitle({ icon: Icon, children }) {
-  return (
-    <div className="flex items-center gap-2 mb-4">
-      {Icon && <Icon size={22} color={COLORS.oxblood} />}
-      <h2 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 800 }} className="text-2xl">
+    <div className="mb-6">
+      <h2 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-4xl leading-none mb-3">
         {children}
       </h2>
+      <Rule weight={2} />
     </div>
   );
 }
@@ -309,17 +280,22 @@ function Toggle({ checked, onChange, label }) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2 px-3 py-1.5 rounded-full transition"
+      className="flex items-center gap-1.5 transition"
       style={{
-        border: `1.5px solid ${checked ? COLORS.forest : COLORS.cardEdge}`,
-        background: checked ? COLORS.forest : 'transparent',
-        color: checked ? COLORS.cream : COLORS.inkSoft,
         fontFamily: FONT_STAMP,
         fontSize: 12,
+        letterSpacing: '0.04em',
+        color: checked ? COLORS.forest : COLORS.inkSoft,
       }}
     >
-      <Leaf size={14} />
-      {label}
+      <span
+        style={{
+          width: 13, height: 13, borderRadius: 3, display: 'inline-block',
+          border: `1.5px solid ${checked ? COLORS.forest : COLORS.inkSoft}`,
+          background: checked ? COLORS.forest : 'transparent',
+        }}
+      />
+      {label.toUpperCase()}
     </button>
   );
 }
@@ -405,7 +381,7 @@ function RecipeFormModal({ initial, onClose, onSave }) {
             {r.image ? (
               <img src={r.image} alt="" className="w-16 h-16 object-cover rounded" style={{ border: `1px solid ${COLORS.cardEdge}` }} />
             ) : (
-              <div className="w-16 h-16 rounded flex items-center justify-center" style={{ background: '#F3F4EC' }}>
+              <div className="w-16 h-16 rounded flex items-center justify-center" style={{ background: COLORS.paperDark }}>
                 <ImageIcon size={20} color={COLORS.forest} />
               </div>
             )}
@@ -453,7 +429,7 @@ function RecipeFormModal({ initial, onClose, onSave }) {
                   className="px-3 py-1 rounded-md text-xs border-0"
                   style={{
                     fontFamily: FONT_BODY,
-                    background: r.tags.includes(t.key) ? COLORS.forest : '#EEF1E4',
+                    background: r.tags.includes(t.key) ? COLORS.forest : COLORS.paperDark,
                     color: r.tags.includes(t.key) ? COLORS.cream : COLORS.forest,
                   }}
                 >
@@ -522,15 +498,6 @@ function NumField({ label, value, onChange }) {
 
 /* ---------------------------------- recipe card ---------------------------------- */
 
-function bandForRecipe(recipe) {
-  const joined = recipe.tags.join(' ');
-  if (/Breakfast/i.test(joined) || recipe.tags.some(t => t.toLowerCase().includes('breakfast'))) return { color: COLORS.bandGold, Icon: Coffee };
-  if (recipe.tags.some(t => t.toLowerCase().includes('lunch'))) return { color: COLORS.bandSage, Icon: Sandwich };
-  if (recipe.tags.some(t => t.toLowerCase().includes('dinner'))) return { color: COLORS.bandForest, Icon: UtensilsCrossed };
-  if (recipe.tags.some(t => t.toLowerCase().includes('snack'))) return { color: COLORS.bandClay, Icon: Cookie };
-  return { color: COLORS.bandSage, Icon: Leaf };
-}
-
 function eligibleSlots(recipe) {
   const out = [];
   ['weekday', 'weekend'].forEach(shopType => {
@@ -541,10 +508,18 @@ function eligibleSlots(recipe) {
   return out;
 }
 
-function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
+function categoryForRecipe(recipe) {
+  const joined = recipe.tags.join(' ').toLowerCase();
+  if (joined.includes('breakfast')) return 'Breakfast';
+  if (joined.includes('lunch')) return 'Lunch';
+  if (joined.includes('dinner')) return 'Dinner';
+  if (joined.includes('snack')) return 'Snacks';
+  return 'Other';
+}
+
+function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sentLabel, setSentLabel] = useState(null);
-  const { color: bandColor, Icon: BandIcon } = bandForRecipe(recipe);
   const slots = eligibleSlots(recipe);
 
   function handleSend(slot) {
@@ -556,47 +531,40 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
 
   return (
     <div
-      className="rounded-lg overflow-hidden relative w-full mb-5 transition-shadow hover:shadow-lg"
-      style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, boxShadow: '0 2px 8px rgba(44,43,34,0.06)', breakInside: 'avoid', display: 'inline-block' }}
+      className="rounded-xl overflow-hidden w-full mb-5"
+      style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, boxShadow: '0 3px 12px rgba(20,20,20,0.08)', breakInside: 'avoid', display: 'inline-block' }}
     >
       {recipe.image ? (
-        <div className="relative">
-          <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 150 }} />
-          <div className="absolute top-2 right-2 flex gap-1">
-            <button onClick={() => onEdit(recipe)} className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.85)' }}><Pencil size={13} color={COLORS.inkSoft} /></button>
-            <button onClick={() => onDelete(recipe.id)} className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.85)' }}><Trash2 size={13} color={COLORS.oxblood} /></button>
-          </div>
-        </div>
+        <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 140 }} />
       ) : (
-        <div className="flex items-center justify-between px-4 py-5" style={{ background: bandColor }}>
-          <BandIcon size={26} color={COLORS.cream} />
-          <div className="flex gap-2">
-            <button onClick={() => onEdit(recipe)}><Pencil size={15} color={COLORS.cream} /></button>
-            <button onClick={() => onDelete(recipe.id)}><Trash2 size={15} color={COLORS.cream} /></button>
-          </div>
+        <div className="w-full flex items-center justify-center" style={{ height: 100, background: COLORS.paperDark }}>
+          <Star size={26} color={COLORS.oxblood} style={{ transform: 'rotate(-8deg)' }} />
         </div>
       )}
 
       <div className="p-4">
-        <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-lg leading-tight mb-2">
-          {recipe.name}
-        </h4>
-
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {recipe.vegetarian && <Stamp tone="clay" icon={Leaf}>Veg</Stamp>}
-          {recipe.tags.map(t => <Stamp key={t}>{TAG_LABEL[t]}</Stamp>)}
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-lg leading-tight">
+            {recipe.name}
+          </h4>
+          <div className="flex items-center gap-2 shrink-0 mt-0.5">
+            <button onClick={() => onEdit(recipe)} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>EDIT</button>
+            <button onClick={() => onDelete(recipe.id)} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>DELETE</button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs mb-2" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
-          <span>{recipe.calories} kcal</span>
-          <span>{recipe.protein}g protein</span>
-          <span>{recipe.carbs}g carbs</span>
-          <span>serves {recipe.servings}</span>
-        </div>
+        <p className="mb-2" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.03em', fontSize: 11 }}>
+          {recipe.vegetarian && <span style={{ color: COLORS.forest, fontWeight: 600 }}>VEG · </span>}
+          {recipe.tags.map(t => TAG_LABEL[t]?.toUpperCase()).join(' · ')}
+        </p>
+
+        <p className="mb-2" style={{ fontFamily: FONT_MONO, color: COLORS.ink, fontSize: 12 }}>
+          {recipe.calories} kcal · {recipe.protein}g protein · serves {recipe.servings}
+        </p>
 
         {recipe.prepAhead && (
-          <div className="flex items-start gap-1 text-xs mb-2" style={{ color: COLORS.mustard, fontFamily: FONT_BODY }}>
-            <Clock size={13} className="mt-0.5 shrink-0" />
+          <div className="flex items-start gap-1 text-xs mb-2" style={{ color: COLORS.forest, fontFamily: FONT_BODY }}>
+            <Clock size={12} className="mt-0.5 shrink-0" />
             <span>{recipe.prepAhead}</span>
           </div>
         )}
@@ -605,13 +573,13 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
           <summary className="text-xs cursor-pointer" style={{ fontFamily: FONT_STAMP, color: COLORS.forest }}>
             ingredients &amp; method
           </summary>
-          <div className="mt-2 text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.ink }}>
-            <ul className="list-disc list-inside mb-2">
+          <div className="mt-2 text-sm" style={{ color: COLORS.ink }}>
+            <ul className="mb-2" style={{ fontFamily: FONT_MONO, fontSize: 13, listStyle: 'none', padding: 0 }}>
               {recipe.ingredients.map((ing, i) => (
                 <li key={i}>{ing.qty ? `${ing.qty} ${ing.unit} ` : ''}{ing.name}</li>
               ))}
             </ul>
-            <p>{recipe.instructions}</p>
+            <p style={{ fontFamily: FONT_BODY }}>{recipe.instructions}</p>
           </div>
         </details>
 
@@ -619,10 +587,10 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
           <button
             onClick={() => setMenuOpen(v => !v)}
             disabled={slots.length === 0}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs disabled:opacity-40"
-            style={{ fontFamily: FONT_STAMP, border: `1.5px solid ${COLORS.forest}`, color: COLORS.forest }}
+            className="w-full text-xs font-bold disabled:opacity-40"
+            style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood, letterSpacing: '0.03em' }}
           >
-            {sentLabel ? `Added → ${sentLabel}` : <>Plan for this week <ArrowRight size={13} /></>}
+            {sentLabel ? `ADDED → ${sentLabel.toUpperCase()}` : 'PLAN FOR THIS WEEK →'}
           </button>
 
           {menuOpen && (
@@ -645,6 +613,8 @@ function RecipeCard({ recipe, idx, onEdit, onDelete, onSendToPlan }) {
 
 /* ---------------------------------- bank tab ---------------------------------- */
 
+const GALLERY_CATEGORY_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Other'];
+
 function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
   const [search, setSearch] = useState('');
   const [activeTags, setActiveTags] = useState([]);
@@ -660,25 +630,34 @@ function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
     return true;
   });
 
+  const groups = {};
+  filtered.forEach(r => {
+    const cat = categoryForRecipe(r);
+    (groups[cat] = groups[cat] || []).push(r);
+  });
+
   return (
     <div>
-      <div className="flex flex-wrap gap-3 items-center mb-4">
+      <div className="flex flex-wrap gap-4 items-center mb-4">
         <input
           value={search} onChange={e => setSearch(e.target.value)} placeholder="search recipes…"
-          className="px-3 py-1.5 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_BODY }}
+          className="px-1 py-1.5 text-sm bg-transparent focus:outline-none"
+          style={{ borderBottom: `1px solid ${COLORS.ink}`, fontFamily: FONT_BODY, color: COLORS.ink }}
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 mb-8">
         {TAGS.map(t => (
           <button key={t.key} onClick={() => toggleFilterTag(t.key)}
-            className="px-3 py-1 rounded-md text-xs border-0"
+            className="text-xs"
             style={{
-              fontFamily: FONT_BODY,
-              background: activeTags.includes(t.key) ? COLORS.oxblood : '#F7E9E0',
-              color: activeTags.includes(t.key) ? COLORS.cream : COLORS.oxblood,
+              fontFamily: FONT_STAMP,
+              letterSpacing: '0.03em',
+              color: activeTags.includes(t.key) ? COLORS.oxblood : COLORS.inkSoft,
+              fontWeight: activeTags.includes(t.key) ? 600 : 400,
+              borderBottom: activeTags.includes(t.key) ? `1px solid ${COLORS.oxblood}` : '1px solid transparent',
             }}>
-            {t.label}
+            {t.label.toUpperCase()}
           </button>
         ))}
       </div>
@@ -686,11 +665,17 @@ function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
       {filtered.length === 0 ? (
         <p className="text-sm" style={{ color: COLORS.inkSoft, fontFamily: FONT_BODY }}>No recipes match yet — add one, or loosen your filters.</p>
       ) : (
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-5">
-          {filtered.map((r, i) => (
-            <RecipeCard key={r.id} recipe={r} idx={i} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
-          ))}
-        </div>
+        GALLERY_CATEGORY_ORDER.map(cat => groups[cat] && groups[cat].length > 0 && (
+          <div key={cat} className="mb-10">
+            <h3 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-3xl leading-none mb-2">{cat}</h3>
+            <Rule weight={2} className="mb-4" />
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-5">
+              {groups[cat].map(r => (
+                <RecipeCard key={r.id} recipe={r} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
+              ))}
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
@@ -699,16 +684,14 @@ function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
 function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setVegOnly }) {
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <SectionTitle icon={Book}>The Recipe Bank</SectionTitle>
+      <SectionTitle>The Recipe Bank</SectionTitle>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian only" />
         <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm"
           style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
           <Plus size={15} /> Add Recipe
         </button>
-      </div>
-
-      <div className="mb-4">
-        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian only" />
       </div>
 
       <RecipeGallery recipes={recipes} vegOnly={vegOnly} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
@@ -731,33 +714,32 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
 
   return (
     <div>
-      <SectionTitle icon={NotebookText}>Recipes to Try</SectionTitle>
-      <p className="text-sm mb-4" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+      <SectionTitle>Recipes to Try</SectionTitle>
+      <p className="text-sm mb-6" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
         A scrap drawer for recipes you've spotted but haven't cooked yet. Paste them in, and promote the good ones to the Bank once you've tried them.
       </p>
 
-      <div className="rounded p-4 mb-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}` }}>
+      <div className="mb-10 pb-6" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (e.g. Mum's Focaccia idea)"
-          className="w-full px-3 py-2 rounded text-sm mb-2" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_BODY }} />
+          className="w-full px-1 py-1.5 text-sm mb-3 bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY }} />
         <textarea value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Paste the recipe, a link, or your notes here…"
-          className="w-full px-3 py-2 rounded text-sm mb-2" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_BODY }} />
-        <button onClick={addEntry} className="px-4 py-2 rounded text-sm" style={{ fontFamily: FONT_STAMP, background: COLORS.forest, color: COLORS.cream }}>
+          className="w-full px-1 py-1.5 text-sm mb-3 bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY }} />
+        <button onClick={addEntry} className="px-4 py-2 rounded-full text-sm" style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
           Save Clipping
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div>
         {toTry.length === 0 && <p className="text-sm" style={{ color: COLORS.inkSoft, fontFamily: FONT_BODY }}>Nothing saved yet.</p>}
         {toTry.map(entry => (
-          <div key={entry.id} className="rounded p-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}` }}>
+          <div key={entry.id} className="py-4" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
             <div className="flex items-start justify-between gap-2 mb-1">
-              <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink }} className="text-base font-bold">{entry.title}</h4>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => onPromote(entry)} className="text-xs px-2 py-1 rounded"
-                  style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-                  Promote to Bank
+              <h4 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink }} className="text-lg font-bold">{entry.title}</h4>
+              <div className="flex items-center gap-4 shrink-0">
+                <button onClick={() => onPromote(entry)} className="text-xs font-semibold" style={{ fontFamily: FONT_STAMP, color: COLORS.orange }}>
+                  PROMOTE TO BANK →
                 </button>
-                <button onClick={() => removeEntry(entry.id)}><Trash2 size={15} color={COLORS.oxblood} /></button>
+                <button onClick={() => removeEntry(entry.id)} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>DELETE</button>
               </div>
             </div>
             <p className="text-sm whitespace-pre-wrap" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>{entry.text}</p>
@@ -829,59 +811,55 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
 
   return (
     <div>
-      <SectionTitle icon={ChefHat}>The Meal Plan</SectionTitle>
+      <SectionTitle>The Meal Plan</SectionTitle>
 
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex rounded-full overflow-hidden" style={{ border: `1.5px solid ${COLORS.oxblood}` }}>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-8">
+        <div className="flex items-center gap-4">
           {['weekday', 'weekend'].map(st => (
             <button key={st} onClick={() => setSettings(prev => ({ ...prev, shopType: st }))}
-              className="px-4 py-1.5 text-sm"
+              className="text-sm pb-0.5"
               style={{
                 fontFamily: FONT_STAMP,
-                background: shopType === st ? COLORS.oxblood : 'transparent',
-                color: shopType === st ? COLORS.cream : COLORS.oxblood,
+                letterSpacing: '0.04em',
+                fontWeight: shopType === st ? 600 : 400,
+                color: shopType === st ? COLORS.oxblood : COLORS.inkSoft,
+                borderBottom: shopType === st ? `2px solid ${COLORS.oxblood}` : '2px solid transparent',
               }}>
-              {st === 'weekday' ? 'Weekday Shop' : 'Weekend Shop'}
+              {st === 'weekday' ? 'WEEKDAY SHOP' : 'WEEKEND SHOP'}
             </button>
           ))}
         </div>
         <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian only" />
         <button onClick={generateSuggestions} className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm"
-          style={{ fontFamily: FONT_STAMP, background: COLORS.forest, color: COLORS.cream }}>
+          style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
           <Shuffle size={14} /> Generate Suggestions
         </button>
         <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>clear this plan</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
-        <div className="lg:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-12">
+        <div className="lg:col-span-2">
           {defs.map(def => {
             const slot = planForShop[def.id] || {};
             const times = slot.times ?? def.defaultTimes;
             const chosen = recipes.find(r => r.id === slot.recipeId);
             return (
-              <div key={def.id} className="rounded p-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}` }}>
+              <div key={def.id} className="py-4" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <span style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood, fontSize: 13 }}>{def.label}</span>
+                  <span style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood, fontSize: 12, letterSpacing: '0.05em', fontWeight: 600 }}>{def.label.toUpperCase()}</span>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>times this period</label>
+                    <label className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>× per week</label>
                     <input type="number" min={0} value={times} onChange={e => setSlot(def.id, 'times', parseFloat(e.target.value) || 0)}
-                      className="w-16 px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
+                      className="w-12 text-center text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }} />
                   </div>
                 </div>
 
                 {chosen ? (
                   <div className="flex items-center gap-3">
-                    {chosen.image ? (
-                      <img src={chosen.image} alt="" className="w-14 h-14 object-cover rounded" />
-                    ) : (
-                      <div className="w-14 h-14 rounded flex items-center justify-center shrink-0" style={{ background: bandForRecipe(chosen).color }}>
-                        {React.createElement(bandForRecipe(chosen).Icon, { size: 20, color: COLORS.cream })}
-                      </div>
-                    )}
+                    {chosen.image && <img src={chosen.image} alt="" className="w-12 h-12 object-cover shrink-0" style={{ borderRadius: 3 }} />}
                     <div className="flex-1 min-w-0">
                       <p style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-base truncate">{chosen.name}</p>
-                      <p className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>{chosen.calories} kcal · {chosen.protein}g protein</p>
+                      <p style={{ fontFamily: FONT_MONO, color: COLORS.inkSoft, fontSize: 12 }}>{chosen.calories} kcal · {chosen.protein}g protein</p>
                       {chosen.prepAhead && (
                         <div className="flex items-start gap-1 text-xs mt-1" style={{ color: COLORS.mustard, fontFamily: FONT_BODY }}>
                           <Clock size={12} className="mt-0.5 shrink-0" /> <span>{chosen.prepAhead}</span>
@@ -900,42 +878,44 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
           })}
         </div>
 
-        <div className="rounded p-5 h-fit" style={{ background: COLORS.paperDark, border: `1px solid ${COLORS.cardEdge}` }}>
-          <h3 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-lg mb-3">
-            Nutrition — {shopType === 'weekday' ? 'work week' : 'weekend'}
-          </h3>
-          <div className="space-y-3 text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.ink }}>
-            <StatRow label="Total calories" value={`${Math.round(nutrition.cal)} kcal`} sub={`~${Math.round(nutrition.cal / days)} kcal/day`} />
-            <StatRow label="Protein" value={`${round1(nutrition.protein)} g`} sub={`~${round1(nutrition.protein / days)} g/day`} />
-            <StatRow label="Carbs" value={`${round1(nutrition.carbs)} g`} sub={`~${round1(nutrition.carbs / days)} g/day`} />
-            <div>
-              <div className="flex justify-between">
-                <span>Veggie servings</span>
-                <span className="font-bold">{round1(nutrition.veggie)} / {round1(goalForPeriod)}</span>
-              </div>
-              <div className="w-full h-2 rounded-full mt-1" style={{ background: COLORS.cardEdge }}>
-                <div className="h-2 rounded-full" style={{
-                  width: `${Math.min(100, (nutrition.veggie / goalForPeriod) * 100)}%`,
-                  background: COLORS.forest,
-                }} />
+        <div className="h-fit" style={{ background: COLORS.paperDark, borderTop: `3px solid ${COLORS.oxblood}` }}>
+          <div className="p-5">
+            <h3 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-2xl leading-none mb-3">
+              Nutrition — {shopType === 'weekday' ? 'work week' : 'weekend'}
+            </h3>
+            <div className="space-y-3 text-sm" style={{ fontFamily: FONT_MONO, color: COLORS.ink }}>
+              <StatRow label="Total calories" value={`${Math.round(nutrition.cal)} kcal`} sub={`~${Math.round(nutrition.cal / days)}/day`} />
+              <StatRow label="Protein" value={`${round1(nutrition.protein)} g`} sub={`~${round1(nutrition.protein / days)}/day`} />
+              <StatRow label="Carbs" value={`${round1(nutrition.carbs)} g`} sub={`~${round1(nutrition.carbs / days)}/day`} />
+              <div>
+                <div className="flex justify-between">
+                  <span>Veggie servings</span>
+                  <span className="font-bold">{round1(nutrition.veggie)} / {round1(goalForPeriod)}</span>
+                </div>
+                <div className="w-full h-1.5 mt-1" style={{ background: COLORS.cardEdge }}>
+                  <div className="h-1.5" style={{
+                    width: `${Math.min(100, (nutrition.veggie / goalForPeriod) * 100)}%`,
+                    background: COLORS.orange,
+                  }} />
+                </div>
               </div>
             </div>
+            <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${COLORS.cardEdge}` }}>
+              <label className="block text-xs mb-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>WEEKLY VEGGIE GOAL (servings)</label>
+              <input type="number" value={settings.veggieGoal} onChange={e => setSettings(prev => ({ ...prev, veggieGoal: parseFloat(e.target.value) || 0 }))}
+                className="w-20 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_MONO }} />
+            </div>
+            <p className="text-xs mt-3" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+              A loose guide, not a strict count — enough to sense-check the week.
+            </p>
           </div>
-          <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${COLORS.cardEdge}` }}>
-            <label className="block text-xs mb-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>WEEKLY VEGGIE GOAL (servings)</label>
-            <input type="number" value={settings.veggieGoal} onChange={e => setSettings(prev => ({ ...prev, veggieGoal: parseFloat(e.target.value) || 0 }))}
-              className="w-24 px-2 py-1 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream }} />
-          </div>
-          <p className="text-xs mt-3" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
-            A loose guide, not a strict count — enough to sense-check the week.
-          </p>
         </div>
       </div>
 
-      <div className="pt-2" style={{ borderTop: `1px solid ${COLORS.cardEdge}` }}>
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-8 mb-2">
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <div>
-            <h3 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-xl">Recipe Gallery</h3>
+            <h3 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-4xl leading-none mb-1">Recipe Gallery</h3>
             <p className="text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
               Scroll through the bank and tap "Plan for this week" to slot a recipe straight in.
             </p>
@@ -945,7 +925,10 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
             <Plus size={15} /> Add Recipe
           </button>
         </div>
-        <RecipeGallery recipes={recipes} vegOnly={settings.vegOnly} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
+        <Rule weight={2} />
+        <div className="mt-6">
+          <RecipeGallery recipes={recipes} vegOnly={settings.vegOnly} onEdit={onEdit} onDelete={onDelete} onSendToPlan={onSendToPlan} />
+        </div>
       </div>
     </div>
   );
@@ -1018,7 +1001,7 @@ function ListTab({ recipes, settings, mealPlan }) {
 
   return (
     <div>
-      <SectionTitle icon={ShoppingCart}>Shopping List — {shopType === 'weekday' ? 'Weekday' : 'Weekend'} Shop</SectionTitle>
+      <SectionTitle>Shopping List — {shopType === 'weekday' ? 'Weekday' : 'Weekend'} Shop</SectionTitle>
 
       {list.length === 0 ? (
         <p className="text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
@@ -1039,22 +1022,24 @@ function ListTab({ recipes, settings, mealPlan }) {
             {copied && <span className="text-sm self-center" style={{ color: COLORS.forest, fontFamily: FONT_BODY }}>Copied!</span>}
           </div>
 
-          <div className="rounded-lg p-6 max-w-xl" style={{ background: COLORS.cream, border: `1px solid ${COLORS.cardEdge}`, boxShadow: '0 4px 14px rgba(0,0,0,0.08)' }}>
-            {CATEGORIES.map(cat => (
-              grouped[cat] && grouped[cat].length > 0 && (
-                <div key={cat} className="mb-4">
-                  <h4 style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood, fontSize: 12, letterSpacing: '0.08em' }} className="uppercase mb-2">{cat}</h4>
-                  <ul className="space-y-1">
-                    {grouped[cat].map((i, idx) => (
-                      <li key={idx} className="flex items-center gap-2 text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.ink }}>
-                        <span style={{ width: 14, height: 14, border: `1.5px solid ${COLORS.inkSoft}`, display: 'inline-block', flexShrink: 0 }} />
-                        {i.name}{i.qty ? ` — ${i.qty}${i.unit ? ' ' + i.unit : ''}` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )
-            ))}
+          <div className="max-w-xl" style={{ borderTop: `3px solid ${COLORS.oxblood}`, borderBottom: `1px solid ${COLORS.cardEdge}` }}>
+            <div className="py-6">
+              {CATEGORIES.map(cat => (
+                grouped[cat] && grouped[cat].length > 0 && (
+                  <div key={cat} className="mb-6">
+                    <h4 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-2xl leading-none mb-2">{cat}</h4>
+                    <ul className="space-y-1.5">
+                      {grouped[cat].map((i, idx) => (
+                        <li key={idx} className="flex items-center gap-2.5 text-sm" style={{ fontFamily: FONT_MONO, color: COLORS.ink }}>
+                          <span style={{ width: 13, height: 13, border: `1.5px solid ${COLORS.inkSoft}`, display: 'inline-block', flexShrink: 0 }} />
+                          {i.name}{i.qty ? ` — ${i.qty}${i.unit ? ' ' + i.unit : ''}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -1065,10 +1050,10 @@ function ListTab({ recipes, settings, mealPlan }) {
 /* ---------------------------------- app shell ---------------------------------- */
 
 const TABS = [
-  { id: 'plan', label: 'Meal Plan', icon: ChefHat },
-  { id: 'bank', label: 'Recipe Bank', icon: Book },
-  { id: 'totry', label: 'To Try', icon: NotebookText },
-  { id: 'list', label: 'Shopping List', icon: ShoppingCart },
+  { id: 'plan', label: 'Meal Plan' },
+  { id: 'bank', label: 'Recipe Bank' },
+  { id: 'totry', label: 'To Try' },
+  { id: 'list', label: 'Shopping List' },
 ];
 
 export default function App() {
@@ -1132,46 +1117,47 @@ export default function App() {
   return (
     <div style={{ background: COLORS.paper, minHeight: '100%' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&family=Permanent+Marker&family=IBM+Plex+Mono:wght@400;500&display=swap');
       `}</style>
 
-      <div className="text-center pt-8 pb-5 px-4">
-        <div className="flex items-center justify-center gap-2 mb-1">
-          <Sprout size={24} color={COLORS.forest} />
-          <h1 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 800 }} className="text-3xl sm:text-4xl">
-            The Kitchen Companion
-          </h1>
-        </div>
-        <p style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.08em' }} className="text-xs uppercase mb-4">
-          a hand-kept book of meals, mealpreps &amp; market lists
-        </p>
-        <SprigDivider />
+      <div className="relative text-center pt-16 pb-14 px-4 max-w-2xl mx-auto">
+        <Star size={20} color={COLORS.forest} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
+        <Star size={30} color={COLORS.oxblood} style={{ position: 'absolute', top: -6, right: '16%', transform: 'rotate(16deg)' }} />
+        <Star size={16} color={COLORS.oxblood} style={{ position: 'absolute', top: '55%', left: '4%', transform: 'rotate(6deg)' }} />
+        <Star size={22} color={COLORS.forest} style={{ position: 'absolute', bottom: 4, right: '8%', transform: 'rotate(-10deg)' }} />
+        <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, lineHeight: 1, textTransform: 'uppercase' }} className="text-5xl sm:text-6xl">
+          The Kitchen Companion
+        </h1>
       </div>
 
       <div className="max-w-5xl mx-auto px-4">
-        <div className="flex flex-wrap gap-2 justify-center my-6">
-          {TABS.map(t => {
-            const Icon = t.icon;
+        <Rule weight={1} color={COLORS.cardEdge} />
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 py-4">
+          {TABS.map((t, i) => {
             const active = tab === t.id;
             return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm transition"
-                style={{
-                  fontFamily: FONT_STAMP,
-                  background: active ? COLORS.paperDark : 'transparent',
-                  color: active ? COLORS.forest : COLORS.inkSoft,
-                  borderBottom: active ? `3px solid ${COLORS.forest}` : '3px solid transparent',
-                }}
-              >
-                <Icon size={15} /> {t.label}
-              </button>
+              <React.Fragment key={t.id}>
+                {i > 0 && <span style={{ color: COLORS.cardEdge }}>·</span>}
+                <button
+                  onClick={() => setTab(t.id)}
+                  className="text-sm transition pb-0.5"
+                  style={{
+                    fontFamily: FONT_STAMP,
+                    letterSpacing: '0.06em',
+                    fontWeight: active ? 600 : 400,
+                    color: active ? COLORS.oxblood : COLORS.inkSoft,
+                    borderBottom: active ? `2px solid ${COLORS.oxblood}` : '2px solid transparent',
+                  }}
+                >
+                  {t.label.toUpperCase()}
+                </button>
+              </React.Fragment>
             );
           })}
         </div>
+        <Rule weight={1} color={COLORS.cardEdge} />
 
-        <div className="pb-16">
+        <div className="pb-16 pt-8">
           {tab === 'plan' && (
             <PlanTab
               recipes={recipes}
