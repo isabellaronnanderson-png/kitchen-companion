@@ -4,19 +4,19 @@ import { Plus, X, Shuffle, Share2, Copy, Clock, Image as ImageIcon } from 'lucid
 /* ---------------------------------- tokens ---------------------------------- */
 
 const COLORS = {
-  paper: '#CFE7F3',
-  paperDark: '#BEDCEB',
+  paper: '#DCE8D3',
+  paperDark: '#BBDDB4',
   card: '#FFFFFF',
-  cardEdge: 'rgba(15,15,15,0.14)',
+  cardEdge: 'rgba(22,22,22,0.14)',
   ink: '#161616',
   inkSoft: 'rgba(22,22,22,0.6)',
-  oxblood: '#E2382A',
-  oxbloodDark: '#B92C21',
-  forest: '#3F6B4A',
-  mustard: '#3F6B4A',
+  oxblood: '#161616',
+  oxbloodDark: '#000000',
+  forest: '#355E3B',
+  mustard: '#355E3B',
   cream: '#FFFFFF',
-  orange: '#E2382A',
-  lightBlue: '#CFE7F3',
+  orange: '#161616',
+  lightBlue: '#DCE8D3',
 };
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -538,7 +538,7 @@ function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
         <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 140 }} />
       ) : (
         <div className="w-full flex items-center justify-center" style={{ height: 100, background: COLORS.paperDark }}>
-          <Star size={26} color={COLORS.oxblood} style={{ transform: 'rotate(-8deg)' }} />
+          <Star size={26} color={COLORS.forest} style={{ transform: 'rotate(-8deg)' }} />
         </div>
       )}
 
