@@ -1142,6 +1142,7 @@ export default function App() {
 
       <div className="relative max-w-5xl mx-auto px-4">
         <WineGlass width={76} height={176} style={{ position: 'absolute', right: '6%', top: 32 }} />
+        <WineGlass width={76} height={176} style={{ position: 'absolute', left: '6%', top: 32, transform: 'scaleX(-1)' }} />
         <div className="relative text-center pt-16 pb-14 px-4 max-w-2xl mx-auto">
           <Star size={20} color={COLORS.forest} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
           <Star size={30} color={COLORS.oxblood} style={{ position: 'absolute', top: -6, right: '16%', transform: 'rotate(16deg)' }} />
