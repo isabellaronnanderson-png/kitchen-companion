@@ -265,6 +265,26 @@ function Star({ size = 24, color = COLORS.oxblood, style = {} }) {
   );
 }
 
+function WineGlass({ width = 76, height = 176, style = {} }) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 60 138" style={style}>
+      <defs>
+        <filter id="kcWineGlassRough" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="11" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1" />
+        </filter>
+      </defs>
+      <g filter="url(#kcWineGlassRough)" fill="none" stroke={COLORS.ink} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 34 Q30 38 52 34 C54 47 48 58 40 66 C36 70 33 72 30 73 C27 72 24 70 20 66 C12 58 6 47 8 34 Z" fill={COLORS.ink} />
+        <path d="M10 14 C14 8 46 8 50 14 C46 20 14 20 10 14 Z" />
+        <path d="M10 14 C6 34 8 52 16 62 C22 70 26 72 30 73 C34 72 38 70 44 62 C52 52 54 34 50 14" />
+        <path d="M29 73 C28 92 28 108 29 123" />
+        <path d="M14 126 C20 122 40 122 46 126 C40 130 20 130 14 126 Z" fill={COLORS.ink} />
+      </g>
+    </svg>
+  );
+}
+
 function SectionTitle({ children }) {
   return (
     <div className="mb-6">
@@ -1120,14 +1140,17 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&family=Permanent+Marker&family=IBM+Plex+Mono:wght@400;500&display=swap');
       `}</style>
 
-      <div className="relative text-center pt-16 pb-14 px-4 max-w-2xl mx-auto">
-        <Star size={20} color={COLORS.forest} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
-        <Star size={30} color={COLORS.oxblood} style={{ position: 'absolute', top: -6, right: '16%', transform: 'rotate(16deg)' }} />
-        <Star size={16} color={COLORS.oxblood} style={{ position: 'absolute', top: '55%', left: '4%', transform: 'rotate(6deg)' }} />
-        <Star size={22} color={COLORS.forest} style={{ position: 'absolute', bottom: 4, right: '8%', transform: 'rotate(-10deg)' }} />
-        <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, lineHeight: 1, textTransform: 'uppercase' }} className="text-5xl sm:text-6xl">
-          The Kitchen Companion
-        </h1>
+      <div className="relative max-w-5xl mx-auto px-4">
+        <WineGlass width={76} height={176} style={{ position: 'absolute', right: '6%', top: 32 }} />
+        <div className="relative text-center pt-16 pb-14 px-4 max-w-2xl mx-auto">
+          <Star size={20} color={COLORS.forest} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
+          <Star size={30} color={COLORS.oxblood} style={{ position: 'absolute', top: -6, right: '16%', transform: 'rotate(16deg)' }} />
+          <Star size={16} color={COLORS.oxblood} style={{ position: 'absolute', top: '55%', left: '4%', transform: 'rotate(6deg)' }} />
+          <Star size={22} color={COLORS.forest} style={{ position: 'absolute', bottom: 4, right: '8%', transform: 'rotate(-10deg)' }} />
+          <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, lineHeight: 1, textTransform: 'uppercase' }} className="text-5xl sm:text-6xl">
+            The Kitchen Companion
+          </h1>
+        </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-4">
