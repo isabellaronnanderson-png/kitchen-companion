@@ -528,13 +528,15 @@ function eligibleSlots(recipe) {
   return out;
 }
 
-function categoryForRecipe(recipe) {
+function categoriesForRecipe(recipe) {
   const joined = recipe.tags.join(' ').toLowerCase();
-  if (joined.includes('breakfast')) return 'Breakfast';
-  if (joined.includes('lunch')) return 'Lunch';
-  if (joined.includes('dinner')) return 'Dinner';
-  if (joined.includes('snack')) return 'Snacks';
-  return 'Other';
+  const cats = [];
+  if (joined.includes('breakfast')) cats.push('Breakfast');
+  if (joined.includes('lunch')) cats.push('Lunch');
+  if (joined.includes('dinner')) cats.push('Dinner');
+  if (joined.includes('snack')) cats.push('Snacks');
+  if (cats.length === 0) cats.push('Other');
+  return cats;
 }
 
 function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
@@ -652,8 +654,9 @@ function RecipeGallery({ recipes, vegOnly, onEdit, onDelete, onSendToPlan }) {
 
   const groups = {};
   filtered.forEach(r => {
-    const cat = categoryForRecipe(r);
-    (groups[cat] = groups[cat] || []).push(r);
+    categoriesForRecipe(r).forEach(cat => {
+      (groups[cat] = groups[cat] || []).push(r);
+    });
   });
 
   return (
