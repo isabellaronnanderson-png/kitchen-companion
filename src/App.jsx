@@ -554,16 +554,18 @@ function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden w-full mb-5"
+      className="rounded-xl w-full mb-5"
       style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, boxShadow: '0 3px 12px rgba(20,20,20,0.08)', breakInside: 'avoid', display: 'inline-block' }}
     >
-      {recipe.image ? (
-        <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 140 }} />
-      ) : (
-        <div className="w-full flex items-center justify-center" style={{ height: 100, background: COLORS.paperDark }}>
-          <Star size={26} color={COLORS.forest} style={{ transform: 'rotate(-8deg)' }} />
-        </div>
-      )}
+      <div className="rounded-t-xl overflow-hidden">
+        {recipe.image ? (
+          <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 140 }} />
+        ) : (
+          <div className="w-full flex items-center justify-center" style={{ height: 100, background: COLORS.paperDark }}>
+            <Star size={26} color={COLORS.forest} style={{ transform: 'rotate(-8deg)' }} />
+          </div>
+        )}
+      </div>
 
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -850,32 +852,37 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
     <div>
       <SectionTitle>The Meal Plan</SectionTitle>
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-8">
-        <div className="flex items-center gap-4">
-          {['weekday', 'weekend'].map(st => (
-            <button key={st} onClick={() => setSettings(prev => ({ ...prev, shopType: st }))}
-              className="text-sm pb-0.5"
-              style={{
-                fontFamily: FONT_STAMP,
-                letterSpacing: '0.04em',
-                fontWeight: shopType === st ? 600 : 400,
-                color: shopType === st ? COLORS.oxblood : COLORS.inkSoft,
-                borderBottom: shopType === st ? `2px solid ${COLORS.oxblood}` : '2px solid transparent',
-              }}>
-              {st === 'weekday' ? 'WEEKDAY SHOP' : 'WEEKEND SHOP'}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-8">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-4">
+            {['weekday', 'weekend'].map(st => (
+              <button key={st} onClick={() => setSettings(prev => ({ ...prev, shopType: st }))}
+                className="text-sm pb-0.5"
+                style={{
+                  fontFamily: FONT_STAMP,
+                  letterSpacing: '0.04em',
+                  fontWeight: shopType === st ? 600 : 400,
+                  color: shopType === st ? COLORS.oxblood : COLORS.inkSoft,
+                  borderBottom: shopType === st ? `2px solid ${COLORS.oxblood}` : '2px solid transparent',
+                }}>
+                {st === 'weekday' ? 'WEEKDAY SHOP' : 'WEEKEND SHOP'}
+              </button>
+            ))}
+          </div>
+          <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian" />
         </div>
-        <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian" />
-        <button onClick={generateSuggestions} className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm"
-          style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-          <Shuffle size={14} /> Generate
-        </button>
-        <button onClick={handleUseIngredients} className="text-xs font-semibold" style={{ fontFamily: FONT_STAMP, color: COLORS.forest }}>
-          Use ingredients
-        </button>
-        <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>Clear</button>
-        {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>{usedMessage}</span>}
+        <div className="flex flex-wrap items-center gap-3">
+          {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>{usedMessage}</span>}
+          <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>Clear</button>
+          <button onClick={handleUseIngredients} className="px-4 py-1.5 rounded-full text-sm font-semibold"
+            style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            Use ingredients
+          </button>
+          <button onClick={generateSuggestions} className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm"
+            style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            <Shuffle size={14} /> Generate
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-12">
