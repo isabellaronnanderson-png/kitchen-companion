@@ -711,7 +711,7 @@ function BankTab({ recipes, onAdd, onEdit, onDelete, onSendToPlan, vegOnly, setV
       <SectionTitle>The Recipe Bank</SectionTitle>
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian only" />
+        <Toggle checked={vegOnly} onChange={setVegOnly} label="Vegetarian" />
         <button onClick={onAdd} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm"
           style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
           <Plus size={15} /> Add Recipe
@@ -866,15 +866,15 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
             </button>
           ))}
         </div>
-        <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian only" />
+        <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian" />
         <button onClick={generateSuggestions} className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm"
           style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
-          <Shuffle size={14} /> Generate Suggestions
+          <Shuffle size={14} /> Generate
         </button>
         <button onClick={handleUseIngredients} className="text-xs font-semibold" style={{ fontFamily: FONT_STAMP, color: COLORS.forest }}>
-          Use up ingredients for this plan
+          Use ingredients
         </button>
-        <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>clear this plan</button>
+        <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>Clear</button>
         {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>{usedMessage}</span>}
       </div>
 
@@ -1071,7 +1071,7 @@ function PantryTab({ pantry, setPantry }) {
     <div>
       <SectionTitle>Pantry</SectionTitle>
       <p className="text-sm mb-6" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
-        What you've got on hand. This fills in automatically when you check off a purchase on the Shopping List, and empties out when you use "Use up ingredients for this plan" on the Meal Plan tab — or edit anything below by hand, any time.
+        What you've got on hand. This fills in automatically when you check off a purchase on the Shopping List, and empties out when you use "Use ingredients" on the Meal Plan tab — or edit anything below by hand, any time.
       </p>
 
       <div className="mb-10 pb-6" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
