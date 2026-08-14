@@ -57,6 +57,7 @@ const SLOT_DEFS = {
 
 function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 function round1(n) { return Math.round((n + Number.EPSILON) * 10) / 10; }
+function pantryKey(name, unit) { return `${(name || '').trim().toLowerCase()}|${(unit || '').trim().toLowerCase()}`; }
 
 function fileToResizedDataUrl(file, maxDim = 640, quality = 0.82) {
   return new Promise((resolve, reject) => {
@@ -775,10 +776,11 @@ function ToTryTab({ toTry, setToTry, onPromote }) {
 
 /* ---------------------------------- plan tab ---------------------------------- */
 
-function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit, onDelete, onSendToPlan, onAdd }) {
+function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit, onDelete, onSendToPlan, onAdd, pantry, onUsePlanIngredients }) {
   const shopType = settings.shopType;
   const defs = SLOT_DEFS[shopType];
   const planForShop = mealPlan[shopType] || {};
+  const [usedMessage, setUsedMessage] = useState(null);
 
   function setSlot(slotId, field, value) {
     setMealPlan(prev => ({
@@ -790,13 +792,19 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
     }));
   }
 
+  function recipeUsesPantry(recipe) {
+    return (recipe.ingredients || []).some(ing => (pantry[pantryKey(ing.name, ing.unit)]?.qty || 0) > 0);
+  }
+
   function generateSuggestions() {
     const used = new Set();
     const newSlots = {};
     defs.forEach(def => {
       const pool = recipes.filter(r => r.tags.includes(def.tag) && (!settings.vegOnly || r.vegetarian));
       const fresh = pool.filter(r => !used.has(r.id));
-      const choices = fresh.length ? fresh : pool;
+      let choices = fresh.length ? fresh : pool;
+      const pantryFirst = choices.filter(recipeUsesPantry);
+      if (pantryFirst.length) choices = pantryFirst;
       if (!choices.length) {
         newSlots[def.id] = { recipeId: null, times: planForShop[def.id]?.times ?? def.defaultTimes };
         return;
@@ -810,6 +818,12 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
 
   function clearPlan() {
     setMealPlan(prev => ({ ...prev, [shopType]: {} }));
+  }
+
+  function handleUseIngredients() {
+    onUsePlanIngredients(shopType);
+    setUsedMessage('Pantry updated for this plan.');
+    setTimeout(() => setUsedMessage(null), 2500);
   }
 
   const nutrition = useMemo(() => {
@@ -857,7 +871,11 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
           style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
           <Shuffle size={14} /> Generate Suggestions
         </button>
+        <button onClick={handleUseIngredients} className="text-xs font-semibold" style={{ fontFamily: FONT_STAMP, color: COLORS.forest }}>
+          Use up ingredients for this plan
+        </button>
         <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>clear this plan</button>
+        {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>{usedMessage}</span>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 mb-12">
@@ -966,13 +984,181 @@ function StatRow({ label, value, sub }) {
   );
 }
 
+/* ---------------------------------- pantry tab ---------------------------------- */
+
+function PantryRow({ item, onRename, onUpdateQty, onUpdateCategory, onRemove }) {
+  const [localName, setLocalName] = useState(item.name);
+  const [localUnit, setLocalUnit] = useState(item.unit);
+
+  useEffect(() => { setLocalName(item.name); }, [item.name]);
+  useEffect(() => { setLocalUnit(item.unit); }, [item.unit]);
+
+  function commitRename() {
+    const trimmedName = localName.trim() || item.name;
+    const trimmedUnit = localUnit.trim();
+    if (trimmedName !== item.name || trimmedUnit !== item.unit) onRename(trimmedName, trimmedUnit);
+  }
+
+  return (
+    <li className="flex items-center gap-3 py-2.5" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
+      <input value={localName} onChange={e => setLocalName(e.target.value)} onBlur={commitRename}
+        className="flex-1 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_MONO, color: COLORS.ink }} />
+      <input type="number" value={item.qty} onChange={e => onUpdateQty(e.target.value)}
+        className="w-16 text-right text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_MONO }} />
+      <input value={localUnit} onChange={e => setLocalUnit(e.target.value)} onBlur={commitRename} placeholder="unit"
+        className="w-14 text-xs bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_STAMP, color: COLORS.inkSoft }} />
+      <select value={item.category} onChange={e => onUpdateCategory(e.target.value)}
+        className="text-xs bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
+        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+      <button onClick={onRemove} className="text-xs shrink-0" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>DELETE</button>
+    </li>
+  );
+}
+
+function PantryTab({ pantry, setPantry }) {
+  const [name, setName] = useState('');
+  const [qty, setQty] = useState('');
+  const [unit, setUnit] = useState('');
+  const [category, setCategory] = useState('Produce');
+
+  const items = Object.values(pantry).sort((a, b) => a.name.localeCompare(b.name));
+  const grouped = {};
+  items.forEach(i => { (grouped[i.category] = grouped[i.category] || []).push(i); });
+
+  function addItem() {
+    if (!name.trim()) return;
+    const key = pantryKey(name, unit);
+    setPantry(prev => {
+      const existing = prev[key];
+      const newQty = round1((existing?.qty || 0) + (parseFloat(qty) || 0));
+      return { ...prev, [key]: { name: name.trim(), unit: unit.trim(), category, qty: newQty } };
+    });
+    setName(''); setQty(''); setUnit('');
+  }
+
+  function updateQty(key, newQty) {
+    setPantry(prev => ({ ...prev, [key]: { ...prev[key], qty: Math.max(0, parseFloat(newQty) || 0) } }));
+  }
+
+  function updateCategory(key, newCategory) {
+    setPantry(prev => ({ ...prev, [key]: { ...prev[key], category: newCategory } }));
+  }
+
+  function renameItem(oldKey, newName, newUnit) {
+    const newKey = pantryKey(newName, newUnit);
+    setPantry(prev => {
+      const item = prev[oldKey];
+      if (!item) return prev;
+      if (newKey === oldKey) return { ...prev, [oldKey]: { ...item, name: newName, unit: newUnit } };
+      const next = { ...prev };
+      delete next[oldKey];
+      const mergedQty = round1((next[newKey]?.qty || 0) + item.qty);
+      next[newKey] = { name: newName, unit: newUnit, category: item.category, qty: mergedQty };
+      return next;
+    });
+  }
+
+  function removeItem(key) {
+    setPantry(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  return (
+    <div>
+      <SectionTitle>Pantry</SectionTitle>
+      <p className="text-sm mb-6" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+        What you've got on hand. This fills in automatically when you check off a purchase on the Shopping List, and empties out when you use "Use up ingredients for this plan" on the Meal Plan tab — or edit anything below by hand, any time.
+      </p>
+
+      <div className="mb-10 pb-6" style={{ borderBottom: `1px solid ${COLORS.cardEdge}` }}>
+        <p className="text-xs mb-2" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.04em' }}>ADD SOMETHING MANUALLY</p>
+        <div className="flex flex-wrap gap-2 items-center">
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="item"
+            className="px-2 py-1.5 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, width: 160 }} />
+          <input value={qty} onChange={e => setQty(e.target.value)} type="number" placeholder="qty"
+            className="px-2 py-1.5 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, width: 70 }} />
+          <input value={unit} onChange={e => setUnit(e.target.value)} placeholder="unit"
+            className="px-2 py-1.5 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, width: 70 }} />
+          <select value={category} onChange={e => setCategory(e.target.value)}
+            className="px-2 py-1.5 text-sm bg-transparent focus:outline-none" style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY }}>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={addItem} className="px-4 py-1.5 rounded-full text-sm" style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            Add
+          </button>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-sm" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+          Nothing tracked yet — check something off on the Shopping List, or add an item above.
+        </p>
+      ) : (
+        CATEGORIES.map(cat => grouped[cat] && grouped[cat].length > 0 && (
+          <div key={cat} className="mb-8">
+            <h4 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-2xl leading-none mb-2">{cat}</h4>
+            <Rule weight={2} className="mb-3" />
+            <ul>
+              {grouped[cat].map(item => {
+                const key = pantryKey(item.name, item.unit);
+                return (
+                  <PantryRow
+                    key={key}
+                    item={item}
+                    onRename={(newName, newUnit) => renameItem(key, newName, newUnit)}
+                    onUpdateQty={newQty => updateQty(key, newQty)}
+                    onUpdateCategory={newCategory => updateCategory(key, newCategory)}
+                    onRemove={() => removeItem(key)}
+                  />
+                );
+              })}
+            </ul>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
 /* ---------------------------------- shopping list tab ---------------------------------- */
 
-function ListTab({ recipes, settings, mealPlan }) {
+function PurchaseModal({ item, onClose, onConfirm }) {
+  const [qty, setQty] = useState(item.toBuy || item.qty || '');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(20,14,8,0.55)' }}>
+      <div className="w-full max-w-sm rounded-lg shadow-2xl p-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}` }}>
+        <h3 style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-lg mb-1">{item.name}</h3>
+        <p className="text-xs mb-4" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>How much did you buy?</p>
+        <div className="flex items-center gap-2 mb-5">
+          <input type="number" autoFocus value={qty} onChange={e => setQty(e.target.value)}
+            className="flex-1 px-3 py-2 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.cream, fontFamily: FONT_MONO }} />
+          <span className="text-sm" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>{item.unit}</span>
+        </div>
+        <button onClick={() => onConfirm(0, true)} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
+          Just check it off — don't track pantry
+        </button>
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-4 py-2 rounded text-sm" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>Cancel</button>
+          <button onClick={() => onConfirm(parseFloat(qty) || 0, true)} className="px-4 py-2 rounded-full text-sm"
+            style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            Add to pantry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListTab({ recipes, settings, mealPlan, checkedItems, setCheckedItems, pantry, onLogPurchase }) {
   const shopType = settings.shopType;
   const defs = SLOT_DEFS[shopType];
   const planForShop = mealPlan[shopType] || {};
   const [copied, setCopied] = useState(false);
+  const [purchaseItem, setPurchaseItem] = useState(null);
 
   const list = useMemo(() => {
     const map = {};
@@ -985,25 +1171,49 @@ function ListTab({ recipes, settings, mealPlan }) {
       const servings = r.servings || 1;
       const factor = times / servings;
       (r.ingredients || []).forEach(ing => {
-        const key = `${(ing.name || '').trim().toLowerCase()}|${(ing.unit || '').trim().toLowerCase()}`;
-        if (!map[key]) map[key] = { name: ing.name, unit: ing.unit, category: ing.category || 'Other', qty: 0, from: new Set() };
+        const key = pantryKey(ing.name, ing.unit);
+        if (!map[key]) map[key] = { key, name: ing.name, unit: ing.unit, category: ing.category || 'Other', qty: 0, from: new Set() };
         map[key].qty += (parseFloat(ing.qty) || 0) * factor;
         map[key].from.add(r.name);
       });
     });
-    return Object.values(map).map(i => ({ ...i, qty: round1(i.qty), from: [...i.from] }));
-  }, [recipes, planForShop, defs]);
+    return Object.values(map).map(i => {
+      const onHand = pantry[i.key]?.qty || 0;
+      return { ...i, qty: round1(i.qty), from: [...i.from], onHand: round1(onHand), toBuy: round1(Math.max(0, i.qty - onHand)) };
+    });
+  }, [recipes, planForShop, defs, pantry]);
+
+  const toBuyList = list.filter(i => i.toBuy > 0);
+  const haveEnoughList = list.filter(i => i.toBuy <= 0);
 
   const grouped = {};
-  list.forEach(i => { (grouped[i.category] = grouped[i.category] || []).push(i); });
+  toBuyList.forEach(i => { (grouped[i.category] = grouped[i.category] || []).push(i); });
+
+  function checkKey(itemKey) { return `${shopType}:${itemKey}`; }
+  function isChecked(itemKey) { return !!checkedItems[checkKey(itemKey)]; }
+  function toggleChecked(itemKey, value) {
+    setCheckedItems(prev => ({ ...prev, [checkKey(itemKey)]: value ?? !prev[checkKey(itemKey)] }));
+  }
+
+  function handleBoxClick(item) {
+    if (isChecked(item.key)) { toggleChecked(item.key, false); return; }
+    setPurchaseItem(item);
+  }
+
+  function confirmPurchase(qtyBought, checkOff) {
+    if (qtyBought > 0) onLogPurchase(purchaseItem, qtyBought);
+    if (checkOff) toggleChecked(purchaseItem.key, true);
+    setPurchaseItem(null);
+  }
 
   function buildText() {
     let text = `🧺 ${shopType === 'weekday' ? 'Weekday' : 'Weekend'} Shopping List\n\n`;
     CATEGORIES.forEach(cat => {
-      if (!grouped[cat] || !grouped[cat].length) return;
+      const items = (grouped[cat] || []).filter(i => !isChecked(i.key));
+      if (!items.length) return;
       text += `${cat.toUpperCase()}\n`;
-      grouped[cat].forEach(i => {
-        text += `☐ ${i.name}${i.qty ? ` — ${i.qty}${i.unit ? ' ' + i.unit : ''}` : ''}\n`;
+      items.forEach(i => {
+        text += `☐ ${i.name}${i.toBuy ? ` — ${i.toBuy}${i.unit ? ' ' + i.unit : ''}` : ''}\n`;
       });
       text += '\n';
     });
@@ -1044,27 +1254,71 @@ function ListTab({ recipes, settings, mealPlan }) {
             </button>
             {copied && <span className="text-sm self-center" style={{ color: COLORS.forest, fontFamily: FONT_BODY }}>Copied!</span>}
           </div>
+          <p className="text-xs mb-5" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+            Tap an item to log how much you bought — it's added to your Pantry and left out of the list next time. Amounts already shown here have your pantry stock subtracted.
+          </p>
 
-          <div className="max-w-xl" style={{ borderTop: `3px solid ${COLORS.oxblood}`, borderBottom: `1px solid ${COLORS.cardEdge}` }}>
-            <div className="py-6">
-              {CATEGORIES.map(cat => (
-                grouped[cat] && grouped[cat].length > 0 && (
-                  <div key={cat} className="mb-6">
-                    <h4 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-2xl leading-none mb-2">{cat}</h4>
-                    <ul className="space-y-1.5">
-                      {grouped[cat].map((i, idx) => (
-                        <li key={idx} className="flex items-center gap-2.5 text-sm" style={{ fontFamily: FONT_MONO, color: COLORS.ink }}>
-                          <span style={{ width: 13, height: 13, border: `1.5px solid ${COLORS.inkSoft}`, display: 'inline-block', flexShrink: 0 }} />
-                          {i.name}{i.qty ? ` — ${i.qty}${i.unit ? ' ' + i.unit : ''}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )
-              ))}
+          {toBuyList.length === 0 ? (
+            <p className="text-sm mb-8" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>
+              You've already got everything this plan needs — nothing left to buy.
+            </p>
+          ) : (
+            <div className="max-w-xl" style={{ borderTop: `3px solid ${COLORS.oxblood}`, borderBottom: `1px solid ${COLORS.cardEdge}` }}>
+              <div className="py-6">
+                {CATEGORIES.map(cat => (
+                  grouped[cat] && grouped[cat].length > 0 && (
+                    <div key={cat} className="mb-6">
+                      <h4 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-2xl leading-none mb-2">{cat}</h4>
+                      <ul className="space-y-1.5">
+                        {grouped[cat].map((i) => {
+                          const checked = isChecked(i.key);
+                          return (
+                            <li key={i.key}>
+                              <button
+                                onClick={() => handleBoxClick(i)}
+                                className="flex items-center gap-2.5 text-sm w-full text-left"
+                                style={{ fontFamily: FONT_MONO, color: checked ? COLORS.inkSoft : COLORS.ink, opacity: checked ? 0.55 : 1 }}
+                              >
+                                <span style={{
+                                  width: 13, height: 13, border: `1.5px solid ${checked ? COLORS.forest : COLORS.inkSoft}`,
+                                  background: checked ? COLORS.forest : 'transparent',
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                                }}>
+                                  {checked && <span style={{ width: 7, height: 7, background: COLORS.cream }} />}
+                                </span>
+                                <span style={{ textDecoration: checked ? 'line-through' : 'none' }}>
+                                  {i.name}{i.toBuy ? ` — ${i.toBuy}${i.unit ? ' ' + i.unit : ''}` : ''}
+                                  {i.onHand > 0 && <span style={{ color: COLORS.forest }}> (have {i.onHand}{i.unit})</span>}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {haveEnoughList.length > 0 && (
+            <div className="mt-8">
+              <p className="text-xs mb-2" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.04em' }}>
+                ALREADY IN YOUR PANTRY — not on the list
+              </p>
+              <ul className="text-xs" style={{ fontFamily: FONT_MONO, color: COLORS.inkSoft }}>
+                {haveEnoughList.map(i => (
+                  <li key={i.key}>{i.name} — have {i.onHand}{i.unit}, needed {i.qty}{i.unit}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </>
+      )}
+
+      {purchaseItem && (
+        <PurchaseModal item={purchaseItem} onClose={() => setPurchaseItem(null)} onConfirm={confirmPurchase} />
       )}
     </div>
   );
@@ -1076,6 +1330,7 @@ const TABS = [
   { id: 'plan', label: 'Meal Plan' },
   { id: 'bank', label: 'Recipe Bank' },
   { id: 'totry', label: 'To Try' },
+  { id: 'pantry', label: 'Pantry' },
   { id: 'list', label: 'Shopping List' },
 ];
 
@@ -1084,11 +1339,13 @@ export default function App() {
   const [toTry, setToTry, toTryLoaded] = useStoredState('totry_v1', []);
   const [settings, setSettings, settingsLoaded] = useStoredState('settings_v1', { shopType: 'weekday', vegOnly: false, veggieGoal: 14 });
   const [mealPlan, setMealPlan, planLoaded] = useStoredState('mealplan_v1', { weekday: {}, weekend: {} });
+  const [checkedItems, setCheckedItems, checkedLoaded] = useStoredState('checkeditems_v1', {});
+  const [pantry, setPantry, pantryLoaded] = useStoredState('pantry_v1', {});
 
   const [tab, setTab] = useState('plan');
   const [modal, setModal] = useState(null); // { recipe, afterSave }
 
-  const allLoaded = recipesLoaded && toTryLoaded && settingsLoaded && planLoaded;
+  const allLoaded = recipesLoaded && toTryLoaded && settingsLoaded && planLoaded && checkedLoaded && pantryLoaded;
 
   function openAdd() { setModal({ recipe: emptyRecipe(null, !settings.vegOnly ? undefined : true), afterSave: null }); }
   function openEdit(recipe) { setModal({ recipe, afterSave: null }); }
@@ -1127,6 +1384,40 @@ export default function App() {
       },
     }));
     setSettings(prev => ({ ...prev, shopType }));
+  }
+
+  function handleLogPurchase(item, qtyBought) {
+    const key = pantryKey(item.name, item.unit);
+    setPantry(prev => {
+      const existing = prev[key];
+      const newQty = round1((existing?.qty || 0) + qtyBought);
+      return { ...prev, [key]: { name: item.name, unit: item.unit, category: item.category, qty: newQty } };
+    });
+  }
+
+  function handleUsePlanIngredients(shopType) {
+    const defs = SLOT_DEFS[shopType];
+    const planForShop = mealPlan[shopType] || {};
+    setPantry(prev => {
+      const next = { ...prev };
+      defs.forEach(def => {
+        const slot = planForShop[def.id];
+        if (!slot || !slot.recipeId) return;
+        const r = recipes.find(x => x.id === slot.recipeId);
+        if (!r) return;
+        const times = slot.times ?? def.defaultTimes;
+        const servings = r.servings || 1;
+        const factor = times / servings;
+        (r.ingredients || []).forEach(ing => {
+          const key = pantryKey(ing.name, ing.unit);
+          const used = (parseFloat(ing.qty) || 0) * factor;
+          if (next[key]) {
+            next[key] = { ...next[key], qty: round1(Math.max(0, next[key].qty - used)) };
+          }
+        });
+      });
+      return next;
+    });
   }
 
   if (!allLoaded) {
@@ -1196,6 +1487,8 @@ export default function App() {
               onDelete={handleDeleteRecipe}
               onSendToPlan={handleSendToPlan}
               onAdd={openAdd}
+              pantry={pantry}
+              onUsePlanIngredients={handleUsePlanIngredients}
             />
           )}
           {tab === 'bank' && (
@@ -1210,7 +1503,18 @@ export default function App() {
             />
           )}
           {tab === 'totry' && <ToTryTab toTry={toTry} setToTry={setToTry} onPromote={openPromote} />}
-          {tab === 'list' && <ListTab recipes={recipes} settings={settings} mealPlan={mealPlan} />}
+          {tab === 'pantry' && <PantryTab pantry={pantry} setPantry={setPantry} />}
+          {tab === 'list' && (
+            <ListTab
+              recipes={recipes}
+              settings={settings}
+              mealPlan={mealPlan}
+              checkedItems={checkedItems}
+              setCheckedItems={setCheckedItems}
+              pantry={pantry}
+              onLogPurchase={handleLogPurchase}
+            />
+          )}
         </div>
       </div>
 
