@@ -306,14 +306,14 @@ function Toggle({ checked, onChange, label }) {
         fontFamily: FONT_STAMP,
         fontSize: 12,
         letterSpacing: '0.04em',
-        color: checked ? COLORS.oxblood : COLORS.inkSoft,
+        color: checked ? COLORS.forest : COLORS.inkSoft,
       }}
     >
       <span
         style={{
           width: 13, height: 13, borderRadius: 3, display: 'inline-block',
-          border: `1.5px solid ${checked ? COLORS.oxblood : COLORS.inkSoft}`,
-          background: checked ? COLORS.oxblood : 'transparent',
+          border: `1.5px solid ${checked ? COLORS.forest : COLORS.inkSoft}`,
+          background: checked ? COLORS.forest : 'transparent',
         }}
       />
       {label.toUpperCase()}
@@ -1476,10 +1476,10 @@ export default function App() {
         <WineGlass width={76} height={176} style={{ position: 'absolute', right: '6%', top: 32 }} />
         <WineGlass width={76} height={176} style={{ position: 'absolute', left: '6%', top: 32, transform: 'scaleX(-1)' }} />
         <div className="relative text-center pt-16 pb-14 px-4 max-w-2xl mx-auto">
-          <Star size={20} color={COLORS.forest} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
+          <Star size={20} color={COLORS.oxblood} style={{ position: 'absolute', top: 10, left: '14%', transform: 'rotate(-14deg)' }} />
           <Star size={30} color={COLORS.oxblood} style={{ position: 'absolute', top: -6, right: '16%', transform: 'rotate(16deg)' }} />
           <Star size={16} color={COLORS.oxblood} style={{ position: 'absolute', top: '55%', left: '4%', transform: 'rotate(6deg)' }} />
-          <Star size={22} color={COLORS.forest} style={{ position: 'absolute', bottom: 4, right: '8%', transform: 'rotate(-10deg)' }} />
+          <Star size={22} color={COLORS.oxblood} style={{ position: 'absolute', bottom: 4, right: '8%', transform: 'rotate(-10deg)' }} />
           <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, lineHeight: 1, textTransform: 'uppercase' }} className="text-5xl sm:text-6xl">
             The Kitchen Companion
           </h1>
