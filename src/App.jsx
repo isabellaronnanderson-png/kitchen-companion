@@ -10,12 +10,12 @@ const COLORS = {
   cardEdge: 'rgba(22,22,22,0.14)',
   ink: '#161616',
   inkSoft: 'rgba(22,22,22,0.6)',
-  oxblood: '#1859D6',
-  oxbloodDark: '#123F9E',
+  oxblood: '#2E63C9',
+  oxbloodDark: '#1F49A3',
   forest: '#355E3B',
   mustard: '#355E3B',
   cream: '#FFFFFF',
-  orange: '#1859D6',
+  orange: '#2E63C9',
   lightBlue: '#DCE8FB',
 };
 
@@ -306,14 +306,14 @@ function Toggle({ checked, onChange, label }) {
         fontFamily: FONT_STAMP,
         fontSize: 12,
         letterSpacing: '0.04em',
-        color: checked ? COLORS.forest : COLORS.inkSoft,
+        color: checked ? COLORS.oxblood : COLORS.inkSoft,
       }}
     >
       <span
         style={{
           width: 13, height: 13, borderRadius: 3, display: 'inline-block',
-          border: `1.5px solid ${checked ? COLORS.forest : COLORS.inkSoft}`,
-          background: checked ? COLORS.forest : 'transparent',
+          border: `1.5px solid ${checked ? COLORS.oxblood : COLORS.inkSoft}`,
+          background: checked ? COLORS.oxblood : 'transparent',
         }}
       />
       {label.toUpperCase()}
@@ -403,7 +403,7 @@ function RecipeFormModal({ initial, onClose, onSave }) {
               <img src={r.image} alt="" className="w-16 h-16 object-cover rounded" style={{ border: `1px solid ${COLORS.cardEdge}` }} />
             ) : (
               <div className="w-16 h-16 rounded flex items-center justify-center" style={{ background: COLORS.paperDark }}>
-                <ImageIcon size={20} color={COLORS.forest} />
+                <ImageIcon size={20} color={COLORS.oxblood} />
               </div>
             )}
             <div>
@@ -450,8 +450,8 @@ function RecipeFormModal({ initial, onClose, onSave }) {
                   className="px-3 py-1 rounded-md text-xs border-0"
                   style={{
                     fontFamily: FONT_BODY,
-                    background: r.tags.includes(t.key) ? COLORS.forest : COLORS.paperDark,
-                    color: r.tags.includes(t.key) ? COLORS.cream : COLORS.forest,
+                    background: r.tags.includes(t.key) ? COLORS.oxblood : COLORS.paperDark,
+                    color: r.tags.includes(t.key) ? COLORS.cream : COLORS.oxblood,
                   }}
                 >
                   {t.label}
@@ -478,7 +478,7 @@ function RecipeFormModal({ initial, onClose, onSave }) {
                   <button onClick={() => removeIngredientRow(idx)}><X size={16} color={COLORS.oxblood} /></button>
                 </div>
               ))}
-              <button onClick={addIngredientRow} className="text-xs flex items-center gap-1" style={{ color: COLORS.forest, fontFamily: FONT_STAMP }}>
+              <button onClick={addIngredientRow} className="text-xs flex items-center gap-1" style={{ color: COLORS.oxblood, fontFamily: FONT_STAMP }}>
                 <Plus size={14} /> add ingredient
               </button>
             </div>
@@ -562,7 +562,7 @@ function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
           <img src={recipe.image} alt={recipe.name} className="w-full object-cover" style={{ height: 140 }} />
         ) : (
           <div className="w-full flex items-center justify-center" style={{ height: 100, background: COLORS.paperDark }}>
-            <Star size={26} color={COLORS.forest} style={{ transform: 'rotate(-8deg)' }} />
+            <Star size={26} color={COLORS.oxblood} style={{ transform: 'rotate(-8deg)' }} />
           </div>
         )}
       </div>
@@ -588,14 +588,14 @@ function RecipeCard({ recipe, onEdit, onDelete, onSendToPlan }) {
         </p>
 
         {recipe.prepAhead && (
-          <div className="flex items-start gap-1 text-xs mb-2" style={{ color: COLORS.forest, fontFamily: FONT_BODY }}>
+          <div className="flex items-start gap-1 text-xs mb-2" style={{ color: COLORS.oxblood, fontFamily: FONT_BODY }}>
             <Clock size={12} className="mt-0.5 shrink-0" />
             <span>{recipe.prepAhead}</span>
           </div>
         )}
 
         <details className="mb-3">
-          <summary className="text-xs cursor-pointer" style={{ fontFamily: FONT_STAMP, color: COLORS.forest }}>
+          <summary className="text-xs cursor-pointer" style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood }}>
             ingredients &amp; method
           </summary>
           <div className="mt-2 text-sm" style={{ color: COLORS.ink }}>
@@ -882,7 +882,7 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
           <Toggle checked={settings.vegOnly} onChange={v => setSettings(prev => ({ ...prev, vegOnly: v }))} label="Vegetarian" />
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>{usedMessage}</span>}
+          {usedMessage && <span className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{usedMessage}</span>}
           <button onClick={clearPlan} className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>Clear</button>
           <button onClick={handleUseIngredients} className="px-4 py-1.5 rounded-full text-sm font-semibold"
             style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
@@ -919,7 +919,7 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
                       <p style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink, fontWeight: 700 }} className="text-base truncate">{chosen.name}</p>
                       <p style={{ fontFamily: FONT_MONO, color: COLORS.inkSoft, fontSize: 12 }}>{chosen.calories} kcal · {chosen.protein}g protein</p>
                       {chosen.prepAhead && (
-                        <div className="flex items-start gap-1 text-xs mt-1" style={{ color: COLORS.mustard, fontFamily: FONT_BODY }}>
+                        <div className="flex items-start gap-1 text-xs mt-1" style={{ color: COLORS.oxblood, fontFamily: FONT_BODY }}>
                           <Clock size={12} className="mt-0.5 shrink-0" /> <span>{chosen.prepAhead}</span>
                         </div>
                       )}
@@ -1277,14 +1277,14 @@ function ListTab({ recipes, settings, mealPlan, checkedItems, setCheckedItems, p
               style={{ fontFamily: FONT_STAMP, border: `1.5px solid ${COLORS.oxblood}`, color: COLORS.oxblood }}>
               <Copy size={15} /> Copy text
             </button>
-            {copied && <span className="text-sm self-center" style={{ color: COLORS.forest, fontFamily: FONT_BODY }}>Copied!</span>}
+            {copied && <span className="text-sm self-center" style={{ color: COLORS.oxblood, fontFamily: FONT_BODY }}>Copied!</span>}
           </div>
           <p className="text-xs mb-5" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
             Tap an item to log how much you bought — it's added to your Pantry and left out of the list next time. Amounts already shown here have your pantry stock subtracted.
           </p>
 
           {toBuyList.length === 0 ? (
-            <p className="text-sm mb-8" style={{ fontFamily: FONT_BODY, color: COLORS.forest }}>
+            <p className="text-sm mb-8" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>
               You've already got everything this plan needs — nothing left to buy.
             </p>
           ) : (
@@ -1305,15 +1305,15 @@ function ListTab({ recipes, settings, mealPlan, checkedItems, setCheckedItems, p
                                 style={{ fontFamily: FONT_MONO, color: checked ? COLORS.inkSoft : COLORS.ink, opacity: checked ? 0.55 : 1 }}
                               >
                                 <span style={{
-                                  width: 13, height: 13, border: `1.5px solid ${checked ? COLORS.forest : COLORS.inkSoft}`,
-                                  background: checked ? COLORS.forest : 'transparent',
+                                  width: 13, height: 13, border: `1.5px solid ${checked ? COLORS.oxblood : COLORS.inkSoft}`,
+                                  background: checked ? COLORS.oxblood : 'transparent',
                                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                 }}>
                                   {checked && <span style={{ width: 7, height: 7, background: COLORS.cream }} />}
                                 </span>
                                 <span style={{ textDecoration: checked ? 'line-through' : 'none' }}>
                                   {i.name}{i.toBuy ? ` — ${i.toBuy}${i.unit ? ' ' + i.unit : ''}` : ''}
-                                  {i.onHand > 0 && <span style={{ color: COLORS.forest }}> (have {i.onHand}{i.unit})</span>}
+                                  {i.onHand > 0 && <span style={{ color: COLORS.oxblood }}> (have {i.onHand}{i.unit})</span>}
                                 </span>
                               </button>
                             </li>
