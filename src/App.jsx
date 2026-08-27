@@ -4,19 +4,19 @@ import { Plus, X, Shuffle, Share2, Copy, Clock, Image as ImageIcon } from 'lucid
 /* ---------------------------------- tokens ---------------------------------- */
 
 const COLORS = {
-  paper: '#DCE8D3',
-  paperDark: '#BBDDB4',
+  paper: '#F7F1E3',
+  paperDark: '#EFE6D0',
   card: '#FFFFFF',
   cardEdge: 'rgba(22,22,22,0.14)',
   ink: '#161616',
   inkSoft: 'rgba(22,22,22,0.6)',
-  oxblood: '#161616',
-  oxbloodDark: '#000000',
+  oxblood: '#1859D6',
+  oxbloodDark: '#123F9E',
   forest: '#355E3B',
   mustard: '#355E3B',
   cream: '#FFFFFF',
-  orange: '#161616',
-  lightBlue: '#DCE8D3',
+  orange: '#1859D6',
+  lightBlue: '#DCE8FB',
 };
 
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -275,12 +275,12 @@ function WineGlass({ width = 76, height = 176, style = {} }) {
           <feDisplacementMap in="SourceGraphic" in2="noise" scale="1" />
         </filter>
       </defs>
-      <g filter="url(#kcWineGlassRough)" fill="none" stroke={COLORS.ink} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 34 Q30 38 52 34 C54 47 48 58 40 66 C36 70 33 72 30 73 C27 72 24 70 20 66 C12 58 6 47 8 34 Z" fill={COLORS.ink} />
+      <g filter="url(#kcWineGlassRough)" fill="none" stroke={COLORS.oxblood} strokeWidth={3.6} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 34 Q30 38 52 34 C54 47 48 58 40 66 C36 70 33 72 30 73 C27 72 24 70 20 66 C12 58 6 47 8 34 Z" fill={COLORS.oxblood} />
         <path d="M10 14 C14 8 46 8 50 14 C46 20 14 20 10 14 Z" />
         <path d="M10 14 C6 34 8 52 16 62 C22 70 26 72 30 73 C34 72 38 70 44 62 C52 52 54 34 50 14" />
         <path d="M29 73 C28 92 28 108 29 123" />
-        <path d="M14 126 C20 122 40 122 46 126 C40 130 20 130 14 126 Z" fill={COLORS.ink} />
+        <path d="M14 126 C20 122 40 122 46 126 C40 130 20 130 14 126 Z" fill={COLORS.oxblood} />
       </g>
     </svg>
   );
@@ -927,20 +927,13 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
                     <button onClick={() => setSlot(def.id, 'recipeId', null)} className="shrink-0" title="Clear"><X size={16} color={COLORS.inkSoft} /></button>
                   </div>
                 ) : (
-                  <div>
-                    <input
-                      value={slot.manualText || ''}
-                      onChange={e => setManualText(def.id, e.target.value)}
-                      placeholder="Not planned yet — pick one from the gallery below, or just type it in here (e.g. “leftover pasta”)"
-                      className="w-full text-sm bg-transparent focus:outline-none py-1"
-                      style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, color: COLORS.ink, fontStyle: slot.manualText ? 'normal' : 'italic' }}
-                    />
-                    {slot.manualText && (
-                      <p className="text-xs mt-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
-                        Quick note only — won't count toward nutrition, pantry, or the shopping list.
-                      </p>
-                    )}
-                  </div>
+                  <input
+                    value={slot.manualText || ''}
+                    onChange={e => setManualText(def.id, e.target.value)}
+                    placeholder="Not planned yet"
+                    className="w-full text-sm bg-transparent focus:outline-none py-1"
+                    style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, color: COLORS.ink, fontStyle: slot.manualText ? 'normal' : 'italic' }}
+                  />
                 )}
               </div>
             );
