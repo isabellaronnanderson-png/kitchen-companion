@@ -794,6 +794,16 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
     }));
   }
 
+  function setManualText(slotId, text) {
+    setMealPlan(prev => ({
+      ...prev,
+      [shopType]: {
+        ...prev[shopType],
+        [slotId]: { ...(prev[shopType]?.[slotId] || {}), manualText: text, recipeId: null },
+      },
+    }));
+  }
+
   function recipeUsesPantry(recipe) {
     return (recipe.ingredients || []).some(ing => (pantry[pantryKey(ing.name, ing.unit)]?.qty || 0) > 0);
   }
@@ -917,9 +927,20 @@ function PlanTab({ recipes, settings, setSettings, mealPlan, setMealPlan, onEdit
                     <button onClick={() => setSlot(def.id, 'recipeId', null)} className="shrink-0" title="Clear"><X size={16} color={COLORS.inkSoft} /></button>
                   </div>
                 ) : (
-                  <p className="text-sm italic" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
-                    Not planned yet — pick one from the gallery below.
-                  </p>
+                  <div>
+                    <input
+                      value={slot.manualText || ''}
+                      onChange={e => setManualText(def.id, e.target.value)}
+                      placeholder="Not planned yet — pick one from the gallery below, or just type it in here (e.g. “leftover pasta”)"
+                      className="w-full text-sm bg-transparent focus:outline-none py-1"
+                      style={{ borderBottom: `1px solid ${COLORS.cardEdge}`, fontFamily: FONT_BODY, color: COLORS.ink, fontStyle: slot.manualText ? 'normal' : 'italic' }}
+                    />
+                    {slot.manualText && (
+                      <p className="text-xs mt-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
+                        Quick note only — won't count toward nutrition, pantry, or the shopping list.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -1190,6 +1211,10 @@ function ListTab({ recipes, settings, mealPlan, checkedItems, setCheckedItems, p
     });
   }, [recipes, planForShop, defs, pantry]);
 
+  const manualEntries = defs
+    .map(def => ({ label: def.label, text: planForShop[def.id]?.manualText }))
+    .filter(e => e.text && e.text.trim());
+
   const toBuyList = list.filter(i => i.toBuy > 0);
   const haveEnoughList = list.filter(i => i.toBuy <= 0);
 
@@ -1324,6 +1349,19 @@ function ListTab({ recipes, settings, mealPlan, checkedItems, setCheckedItems, p
         </>
       )}
 
+      {manualEntries.length > 0 && (
+        <div className="mt-8">
+          <p className="text-xs mb-2" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.04em' }}>
+            ALSO PLANNED (typed in — no shopping list tracking)
+          </p>
+          <ul className="text-xs" style={{ fontFamily: FONT_MONO, color: COLORS.inkSoft }}>
+            {manualEntries.map((e, idx) => (
+              <li key={idx}>{e.label}: {e.text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {purchaseItem && (
         <PurchaseModal item={purchaseItem} onClose={() => setPurchaseItem(null)} onConfirm={confirmPurchase} />
       )}
@@ -1387,7 +1425,7 @@ export default function App() {
       ...prev,
       [shopType]: {
         ...prev[shopType],
-        [slotId]: { ...(prev[shopType]?.[slotId] || {}), recipeId, times: prev[shopType]?.[slotId]?.times ?? def.defaultTimes },
+        [slotId]: { ...(prev[shopType]?.[slotId] || {}), recipeId, manualText: '', times: prev[shopType]?.[slotId]?.times ?? def.defaultTimes },
       },
     }));
     setSettings(prev => ({ ...prev, shopType }));
