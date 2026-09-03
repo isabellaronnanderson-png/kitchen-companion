@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, X, Shuffle, Share2, Copy, Clock, Image as ImageIcon } from 'lucide-react';
+import { Plus, X, Shuffle, Share2, Copy, Clock, Image as ImageIcon, LogOut, Download, Upload, ChevronDown, Loader2, Mail } from 'lucide-react';
+import { supabase, DATA_TABLE } from './supabaseClient';
 
 /* ---------------------------------- tokens ---------------------------------- */
 
@@ -1372,7 +1373,7 @@ const TABS = [
   { id: 'list', label: 'Shopping List' },
 ];
 
-export default function App() {
+function KitchenCompanionApp({ session }) {
   const [recipes, setRecipes, recipesLoaded] = useStoredState('recipes_v1', SEED_RECIPES);
   const [toTry, setToTry, toTryLoaded] = useStoredState('totry_v1', []);
   const [settings, setSettings, settingsLoaded] = useStoredState('settings_v1', { shopType: 'weekday', vegOnly: false, veggieGoal: 14 });
@@ -1382,8 +1383,73 @@ export default function App() {
 
   const [tab, setTab] = useState('plan');
   const [modal, setModal] = useState(null); // { recipe, afterSave }
+  const [cloudSynced, setCloudSynced] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null); // 'saving' | 'saved' | 'error' | null
 
   const allLoaded = recipesLoaded && toTryLoaded && settingsLoaded && planLoaded && checkedLoaded && pantryLoaded;
+
+  // On login: pull this user's cloud data down (cloud is the source of truth
+  // from here on), or if this is their first time, push whatever's already
+  // sitting in local storage up to the cloud instead of discarding it.
+  useEffect(() => {
+    if (!allLoaded || !session?.user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from(DATA_TABLE)
+          .select('*')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (cancelled) return;
+        if (data) {
+          setRecipes(data.recipes ?? []);
+          setToTry(data.to_try ?? []);
+          setSettings(data.settings ?? { shopType: 'weekday', vegOnly: false, veggieGoal: 14 });
+          setMealPlan(data.meal_plan ?? { weekday: {}, weekend: {} });
+          setCheckedItems(data.checked_items ?? {});
+          setPantry(data.pantry ?? {});
+        } else {
+          const { error: insertError } = await supabase.from(DATA_TABLE).insert({
+            user_id: session.user.id,
+            recipes, to_try: toTry, settings, meal_plan: mealPlan, checked_items: checkedItems, pantry,
+          });
+          if (insertError) throw insertError;
+        }
+      } catch (e) {
+        setSyncStatus('error');
+      } finally {
+        if (!cancelled) setCloudSynced(true);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allLoaded, session?.user?.id]);
+
+  // After the initial reconcile, keep pushing local changes up to the cloud.
+  useEffect(() => {
+    if (!cloudSynced || !session?.user) return;
+    setSyncStatus('saving');
+    const handle = setTimeout(() => {
+      supabase.from(DATA_TABLE).upsert({
+        user_id: session.user.id,
+        recipes, to_try: toTry, settings, meal_plan: mealPlan, checked_items: checkedItems, pantry,
+        updated_at: new Date().toISOString(),
+      }).then(({ error }) => setSyncStatus(error ? 'error' : 'saved'));
+    }, 1200);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipes, toTry, settings, mealPlan, checkedItems, pantry, cloudSynced, session?.user?.id]);
+
+  function handleRestoreBackup(parsed) {
+    if (parsed.recipes) setRecipes(parsed.recipes);
+    if (parsed.toTry) setToTry(parsed.toTry);
+    if (parsed.settings) setSettings(parsed.settings);
+    if (parsed.mealPlan) setMealPlan(parsed.mealPlan);
+    if (parsed.checkedItems) setCheckedItems(parsed.checkedItems);
+    if (parsed.pantry) setPantry(parsed.pantry);
+  }
 
   function openAdd() { setModal({ recipe: emptyRecipe(null, !settings.vegOnly ? undefined : true), afterSave: null }); }
   function openEdit(recipe) { setModal({ recipe, afterSave: null }); }
@@ -1471,6 +1537,18 @@ export default function App() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&family=Permanent+Marker&family=IBM+Plex+Mono:wght@400;500&display=swap');
       `}</style>
+
+      <div className="max-w-5xl mx-auto px-4 pt-4 flex items-center justify-end gap-4">
+        {syncStatus && (
+          <span className="text-xs" style={{ fontFamily: FONT_STAMP, color: syncStatus === 'error' ? COLORS.oxblood : COLORS.inkSoft }}>
+            {syncStatus === 'saving' && 'Saving…'}
+            {syncStatus === 'saved' && 'Saved to cloud'}
+            {syncStatus === 'error' && "Couldn't sync"}
+          </span>
+        )}
+        <BackupMenu recipes={recipes} toTry={toTry} settings={settings} mealPlan={mealPlan} checkedItems={checkedItems} pantry={pantry} onRestore={handleRestoreBackup} />
+        <AccountBadge email={session?.user?.email} />
+      </div>
 
       <div className="relative max-w-5xl mx-auto px-4">
         <WineGlass width={76} height={176} style={{ position: 'absolute', right: '6%', top: 32 }} />
@@ -1561,4 +1639,215 @@ export default function App() {
       )}
     </div>
   );
+}
+
+/* ---------------------------------- backup / account ---------------------------------- */
+
+function BackupMenu({ recipes, toTry, settings, mealPlan, checkedItems, pantry, onRestore }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState(null);
+
+  function downloadBackup() {
+    const payload = { recipes, toTry, settings, mealPlan, checkedItems, pantry, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kitchen-companion-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setOpen(false);
+  }
+
+  function handleFilePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        onRestore(parsed);
+        setOpen(false);
+      } catch (err) {
+        setError("Couldn't read that file — make sure it's a backup exported from this app.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(v => !v)} className="flex items-center gap-1 text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>
+        Backup <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 rounded-lg shadow-lg z-30 overflow-hidden" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, minWidth: 200 }}>
+          <button onClick={downloadBackup} className="w-full flex items-center gap-2 text-left px-3 py-2.5 text-sm hover:opacity-80"
+            style={{ fontFamily: FONT_BODY, color: COLORS.ink, borderBottom: `1px solid ${COLORS.cardEdge}` }}>
+            <Download size={14} /> Download backup
+          </button>
+          <label className="w-full flex items-center gap-2 text-left px-3 py-2.5 text-sm cursor-pointer hover:opacity-80" style={{ fontFamily: FONT_BODY, color: COLORS.ink }}>
+            <Upload size={14} /> Restore from file
+            <input type="file" accept="application/json" onChange={handleFilePick} className="hidden" />
+          </label>
+          {error && <p className="text-xs px-3 pb-2" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AccountBadge({ email }) {
+  const [open, setOpen] = useState(false);
+  const initial = (email || '?').trim().charAt(0).toUpperCase();
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(v => !v)} className="flex items-center gap-2">
+        <span className="flex items-center justify-center rounded-full text-xs font-semibold"
+          style={{ width: 26, height: 26, background: COLORS.oxblood, color: COLORS.cream, fontFamily: FONT_STAMP }}>
+          {initial}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 rounded-lg shadow-lg z-30 overflow-hidden" style={{ background: COLORS.card, border: `1px solid ${COLORS.cardEdge}`, minWidth: 200 }}>
+          <p className="px-3 pt-2.5 pb-1 text-xs truncate" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>{email}</p>
+          <button onClick={handleSignOut} className="w-full flex items-center gap-2 text-left px-3 py-2.5 text-sm hover:opacity-80"
+            style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------- auth screen ---------------------------------- */
+
+function AuthScreen() {
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'checkEmail'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        const { error: signUpError } = await supabase.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
+        setMode('checkEmail');
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (mode === 'checkEmail') {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center px-4" style={{ background: COLORS.paper }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&family=Permanent+Marker&display=swap');`}</style>
+        <div className="max-w-sm w-full text-center">
+          <Mail size={40} color={COLORS.oxblood} className="mx-auto mb-4" />
+          <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-4xl mb-3">Check your email</h1>
+          <p className="text-sm mb-6" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+            We've sent a confirmation link to <strong style={{ color: COLORS.ink }}>{email}</strong>. Click it, then come back here and sign in.
+          </p>
+          <button onClick={() => setMode('signin')} className="text-sm font-semibold" style={{ fontFamily: FONT_STAMP, color: COLORS.oxblood }}>
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full min-h-screen flex items-center justify-center px-4" style={{ background: COLORS.paper }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&family=Permanent+Marker&display=swap');`}</style>
+      <div className="max-w-sm w-full">
+        <div className="text-center mb-8">
+          <h1 style={{ fontFamily: FONT_SCRIPT, color: COLORS.oxblood, textTransform: 'uppercase' }} className="text-5xl leading-none mb-2">
+            The Kitchen Companion
+          </h1>
+          <p className="text-xs" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft, letterSpacing: '0.05em' }}>
+            {mode === 'signup' ? 'CREATE AN ACCOUNT' : 'SIGN IN TO CONTINUE'}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs mb-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>EMAIL</label>
+            <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+              className="w-full px-3 py-2 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.card, fontFamily: FONT_BODY }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ fontFamily: FONT_STAMP, color: COLORS.inkSoft }}>PASSWORD</label>
+            <input type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)}
+              className="w-full px-3 py-2 rounded text-sm" style={{ border: `1px solid ${COLORS.cardEdge}`, background: COLORS.card, fontFamily: FONT_BODY }} />
+          </div>
+
+          {error && <p className="text-xs" style={{ fontFamily: FONT_BODY, color: COLORS.oxblood }}>{error}</p>}
+
+          <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold disabled:opacity-60"
+            style={{ fontFamily: FONT_STAMP, background: COLORS.oxblood, color: COLORS.cream }}>
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            {mode === 'signup' ? 'Sign up' : 'Sign in'}
+          </button>
+        </form>
+
+        <p className="text-center text-sm mt-6" style={{ fontFamily: FONT_BODY, color: COLORS.inkSoft }}>
+          {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); setError(null); }} className="font-semibold" style={{ color: COLORS.oxblood }}>
+            {mode === 'signup' ? 'Sign in' : 'Sign up'}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- app entry (auth gate) ---------------------------------- */
+
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoaded(true);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (!authLoaded) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center" style={{ background: COLORS.paper }}>
+        <p style={{ fontFamily: FONT_DISPLAY, color: COLORS.ink }}>Loading…</p>
+      </div>
+    );
+  }
+
+  if (!session) return <AuthScreen />;
+
+  return <KitchenCompanionApp key={session.user.id} session={session} />;
 }
